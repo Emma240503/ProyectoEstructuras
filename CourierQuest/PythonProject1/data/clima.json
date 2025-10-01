@@ -1,0 +1,79 @@
+{
+  "version": "1.0",
+  "data": {
+    "city": "TigerCity",
+    "initial": {
+      "condition": "clear",
+      "intensity": 0.3
+    },
+    "conditions": [
+      "clear",
+      "clouds",
+      "rain_light",
+      "rain",
+      "storm",
+      "fog",
+      "wind",
+      "heat",
+      "cold"
+    ],
+    "transition": {
+      "clear": {
+        "clear": 0.4,
+        "clouds": 0.3,
+        "wind": 0.15,
+        "heat": 0.1,
+        "fog": 0.05
+      },
+      "clouds": {
+        "clear": 0.25,
+        "clouds": 0.35,
+        "rain_light": 0.25,
+        "fog": 0.1,
+        "wind": 0.05
+      },
+      "rain_light": {
+        "clouds": 0.4,
+        "rain_light": 0.3,
+        "rain": 0.25,
+        "clear": 0.05
+      },
+      "rain": {
+        "rain_light": 0.3,
+        "rain": 0.35,
+        "storm": 0.2,
+        "clouds": 0.15
+      },
+      "storm": {
+        "rain": 0.45,
+        "storm": 0.25,
+        "clouds": 0.2,
+        "wind": 0.1
+      },
+      "fog": {
+        "fog": 0.4,
+        "clouds": 0.3,
+        "clear": 0.25,
+        "cold": 0.05
+      },
+      "wind": {
+        "wind": 0.35,
+        "clear": 0.3,
+        "clouds": 0.25,
+        "storm": 0.1
+      },
+      "heat": {
+        "heat": 0.45,
+        "clear": 0.35,
+        "clouds": 0.15,
+        "wind": 0.05
+      },
+      "cold": {
+        "cold": 0.4,
+        "clear": 0.25,
+        "clouds": 0.2,
+        "fog": 0.15
+      }
+    }
+  }
+}
