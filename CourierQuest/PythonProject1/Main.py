@@ -57,7 +57,7 @@ historial_movimientos = HistorialMovimientos()
 # --- Cargar mapa y pedidos iniciales ---
 tiles = cargar_mapa(api)
 mapa_data = api.obtener_mapa()["data"]
-meta_ingresos = mapa_data.get("goal", 3000)  # Meta de ingresos del mapa
+meta_ingresos = 5500  # Meta de ingresos del mapa
 
 pedidos_data = api.obtener_pedidos()["data"]
 reubicar_pedidos(pedidos_data, tiles)
@@ -182,6 +182,18 @@ def mostrar_hud_mejorado():
 def mostrar_inventario_detallado_ui():
     if not mostrar_inventario_detallado or not jugador.inventario:
         return
+
+    #--- Mostrar estadísticas ---
+    if mostrar_estadisticas:
+        estadisticas = jugador.obtener_estadisticas()
+        y = 200  # O la posición que prefieras
+        font_estad = pygame.font.SysFont(None, 22)
+        for clave, valor in estadisticas.items():
+            texto = f"{clave.replace('_', ' ').capitalize()}: {valor:.2f}" if isinstance(valor,
+                                                                                         float) else f"{clave.replace('_', ' ').capitalize()}: {valor}"
+            texto_render = font_estad.render(texto, True, (0, 0, 0))
+            screen.blit(texto_render, (10, y))
+            y += 25
 
     # Fondo semi-transparente
     overlay = pygame.Surface((400, 300))
@@ -481,7 +493,7 @@ while running:
     font_controles = pygame.font.SysFont(None, 20)
     controles_texto = [
         '"Q" cancelar pedido  "U" deshacer  "I" inventario',
-        '"Ctrl+S" guardar  "T" estadísticas'
+        '"Ctrl+S" guardar  "I+T" estadísticas'
     ]
     for i, texto in enumerate(controles_texto):
         rendered = font_controles.render(texto, True, (0, 0, 0))
