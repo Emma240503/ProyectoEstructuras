@@ -1,7 +1,3 @@
-# pedidos.py
-
-
-
 """
 pedidos.py.
 
@@ -15,8 +11,10 @@ import random
 
 
 def obtener_casillas_libres(mapa, ocupadas=None):
-    """
-    Retorna una lista de todas las casillas libres (no bloqueadas) del mapa.
+    """Retorna una lista.
+
+     La lista es de todas las casillas
+     libres (no bloqueadas) del mapa.
     """
     if ocupadas is None:
         ocupadas = set()
@@ -30,17 +28,16 @@ def obtener_casillas_libres(mapa, ocupadas=None):
 
 
 def asignar_posicion_aleatoria(mapa, ocupadas, separacion=4):
-    """
-    Asigna una posición aleatoria libre respetando la separación mínima.
+    """Asigna una posición aleatoria libre respetando la separación mínima.
 
     Returns:
         [x, y] si encuentra posición, None si no hay espacio
     """
     casillas_libres = obtener_casillas_libres(mapa, ocupadas)
-    random.shuffle(casillas_libres)  # Mezclar para obtener posiciones aleatorias
+    random.shuffle(casillas_libres)
+    # Mezclar para obtener posiciones aleatorias.
 
     for nx, ny in casillas_libres:
-        # Verificar si cumple separación
         libre = True
         for sx in range(-separacion, separacion + 1):
             for sy in range(-separacion, separacion + 1):
@@ -66,11 +63,11 @@ def reubicar_pedidos(pedidos, mapa, ocupadas=None, separacion=4):
         con separación mínima de 4.
 
         Args:
-            pedidos (list): Lista de dicts con claves "pickup" y "dropoff".
-            mapa (list): Matriz del mapa.
-            ocupadas (set): Conjunto de tuplas (x, y) de casillas ocupadas.
-            separacion (int): Número mínimo de
-            casillas alrededor que deben estar libres.
+        pedidos (list): Lista de dicts con claves "pickup" y "dropoff".
+        mapa (list): Matriz del mapa.
+        ocupadas (set): Conjunto de tuplas (x, y) de casillas ocupadas.
+        separacion (int): Número mínimo de
+        casillas alrededor que deben estar libres.
         """
     if ocupadas is None:
         ocupadas = set()
@@ -79,30 +76,36 @@ def reubicar_pedidos(pedidos, mapa, ocupadas=None, separacion=4):
         for punto in ["pickup", "dropoff"]:
             x0, y0 = p[punto]
 
-            # Si el punto está bloqueado o ocupado, buscamos un lugar libre
             if mapa[y0][x0] == "B" or (x0, y0) in ocupadas:
                 visitados = set()
                 cola = deque([(x0, y0)])
                 encontrado = False
                 intentos = 0
-                max_intentos = len(mapa) * len(mapa[0])  # Evitar bucles infinitos
+                max_intentos = len(mapa) * len(mapa[0])
 
                 while cola and not encontrado and intentos < max_intentos:
                     intentos += 1
                     x, y = cola.popleft()
+
                     for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                         nx, ny = x + dx, y + dy
                         if 0 <= nx < len(mapa[0]) and 0 <= ny < len(mapa):
                             if (nx, ny) not in visitados:
                                 visitados.add((nx, ny))
 
-                                # Verificar si cumple separación
-                                libre = mapa[ny][nx] != "B" and (nx, ny) not in ocupadas
+                                libre = (
+                                        mapa[ny][nx] != "B"
+                                        and (nx, ny) not in ocupadas
+                                )
+
                                 if libre and separacion > 0:
-                                    for sx in range(-separacion, separacion + 1):
-                                        for sy in range(-separacion, separacion + 1):
+                                    for sx in range(
+                                            -separacion, separacion + 1):
+                                        for sy in range(
+                                                -separacion, separacion + 1):
                                             tx, ty = nx + sx, ny + sy
-                                            if 0 <= tx < len(mapa[0]) and 0 <= ty < len(mapa):
+                                            if (0 <= tx < len(mapa[0])
+                                                    and 0 <= ty < len(mapa)):
                                                 if (tx, ty) in ocupadas:
                                                     libre = False
                                                     break
@@ -117,7 +120,7 @@ def reubicar_pedidos(pedidos, mapa, ocupadas=None, separacion=4):
                                 else:
                                     cola.append((nx, ny))
 
-                # Si no se encontró lugar, al menos mover a una casilla no bloqueada cercana
+                # Si no se encontró lugar, mover a casilla libre cercana
                 if not encontrado:
                     for dx in range(-3, 4):
                         for dy in range(-3, 4):
@@ -133,9 +136,10 @@ def reubicar_pedidos(pedidos, mapa, ocupadas=None, separacion=4):
             else:
                 ocupadas.add((x0, y0))
 
+
 def crear_objetos_pedidos(pedidos_data):
     """Crea y retorna los pedidos tomándolos de la API."""
-
-    return [Pedido(p["pickup"], p["dropoff"], p.get("weight", 1), p.get("priority", 0), p.get("payout", 100)) for p in
+    return [Pedido(p["pickup"], p["dropoff"],
+                   p.get("weight", 1), p.get("priority", 0),
+                   p.get("payout", 100)) for p in
             pedidos_data]
-
