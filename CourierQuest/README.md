@@ -39,6 +39,22 @@ colas (deque) y el método sorted(), también se agregó
 una segunda opción para que se ordenaran los pedidos por
 dinero haciendo uso del "Insertion sort".
 
+Por otro lado se usaron listas [] como "pedidos_activos" que son pedidos
+que estan en el mapa y pueden recogerse, "jugador.inventario", que es la cantidad 
+de espacio que tiene el jugador en la mochila. Por otro lado se usaron set( ), que
+sirven para evitar duplicados dentro del juego, es decir que todos los pedidos seran
+diferentes siempre, en este caso estan: pedidos_vistos=set( ), que su funcion es ver si
+un pedido ya fue extraido de la API para asi no volver a llamar el mismo pedido y llamar a 
+otro diferente. Asi mismo, esta ocupadas = set( ) que sirve para verificar si un pedido
+esta en (x, y) posicion y asi mandarlo para otra casilla. Se utilizo set ( ) ya que
+es muy eficente para verificar si un elemento existe O(1). Ademas a la hora de agregar 
+elementos en set ( ) solo acepta elementos que no se pueden cambiar, por eso se usan tuples
+para poder agregar a los set y es la manera mas efeciente O(1):
+ocupadas.add(tuple(ped.pickup))
+ocupadas.add(tuple(ped.dropoff)) 
+En este caso las tuples se usan nada mas para guardar las coordenadas.
+
+
 Para el manejo de pedidos con el heapq obtenemos una
 complejidad de O(n log n) sin importar el orden en el
 que aparezcan los pedidos con diferentes prioridades.
