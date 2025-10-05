@@ -88,7 +88,8 @@ ultimo_check = time.time()
 check_interval = 15
 pedidos_activos = []
 pedidos_vistos = set()  # IDs de pedidos ya procesados
-
+ultimo_limpieza_vistos = time.time()
+intervalo_limpieza = 20
 
 # --- Variables de liberación ---
 ultimo_liberado = 0
@@ -292,6 +293,8 @@ def mostrar_inventario_detallado_ui():
             rendered = font.render(texto, True, color)
             screen.blit(rendered, (210, y_offset + i * 20))
 
+
+
 # --- Bucle principal ---
 running = True
 while running:
@@ -357,6 +360,18 @@ while running:
                         and event.key == pygame.K_ESCAPE)):
                 running = False
         continue
+    # --- Limpiar pedidos vistos periódicamente ---
+    if ahora - ultimo_limpieza_vistos >= intervalo_limpieza:
+
+        ids_activos = set()
+        for ped in pedidos_activos:
+            ids_activos.add(getattr(ped, 'id', None))
+        for ped in jugador.inventario:
+            ids_activos.add(getattr(ped, 'id', None))
+
+        # Limpiar pedidos_vistos manteniendo solo los activos
+        pedidos_vistos = ids_activos
+        ultimo_limpieza_vistos = ahora
 
     # --- Chequear nuevos pedidos (solo si juego activo) ---
     if ahora - ultimo_check >= check_interval:
