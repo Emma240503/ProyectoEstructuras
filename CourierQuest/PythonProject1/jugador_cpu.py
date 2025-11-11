@@ -299,16 +299,155 @@ class JugadorCPU(Jugador):
     # ========================================
 
     def _ia_media(self, mapa, pedidos_activos, clima_mult, consumo_clima_extra):
-        """IA nivel medio: Evaluación con heurísticas.
-
-        TODO: Implementar Greedy o Expectimax
-        - Anticipar 2-3 movimientos
-        - Evaluar con función de puntuación
-        - Seleccionar mejor movimiento
+        """IA nivel medio (Expectimax):
+        - Evalúa varios movimientos adelante (profundidad)
+        - Calcula el valor esperado de cada movimiento considerando aleatoriedad
+        - Elige el movimiento con mayor valor esperado
         """
-        # Por ahora, usar IA fácil
-        print("IA Media aún no implementada, usando IA fácil")
-        self._ia_facil(mapa, pedidos_activos, clima_mult, consumo_clima_extra)
+
+        ahora = time.time()
+
+        # Guardar posición actual en historial
+        self.historial_posiciones.append((self.x, self.y))
+        if len(self.historial_posiciones) > self.max_historial:
+            self.historial_posiciones.pop(0)
+
+        # Detectar si está en bucle
+        if not self.modo_escape and len(self.historial_posiciones) >= 6:
+            pos_actual = (self.x, self.y)
+            repeticiones = self.historial_posiciones[-6:].count(pos_actual)
+
+            # Si ha estado en la misma posición 3+ veces en las últimas 6 posiciones
+            if repeticiones >= 3:
+                self.modo_escape = True
+                self.tiempo_escape = ahora
+                self.objetivo_actual = None
+
+        # Desactivar modo escape después del tiempo
+        if self.modo_escape and (ahora - self.tiempo_escape > self.duracion_escape):
+            self.modo_escape = False
+            self.historial_posiciones.clear()
+
+        # Elegir objetivo (más cercano o más importante)
+        if (self.objetivo_actual is None or
+                ahora - self.ultimo_cambio_objetivo > self.tiempo_cambio_objetivo):
+            self._elegir_objetivo_expectimax(pedidos_activos)
+            self.ultimo_cambio_objetivo = ahora
+            self.tiempo_cambio_objetivo = random.randint(5, 9)
+
+        # Recoger pedido si estamos en pickup
+        for pedido in list(pedidos_activos):
+            if [self.x, self.y] == pedido.pickup:
+                if self.recoger_pedido(pedido):
+                    pedidos_activos.remove(pedido)
+                    if self.objetivo_actual == pedido.pickup:
+                        self.objetivo_actual = pedido.dropoff
+                    print(f"CPU (Expectimax) recogió pedido!")
+
+        # Entregar pedido si estamos en dropoff
+        entregado = self.entregar_pedido()
+        if entregado:
+            print(f"CPU (Expectimax) entregó pedido! ${self.puntaje}")
+            self.objetivo_actual = None
+            self.historial_posiciones.clear()
+
+        # Decide el movimiento
+        if self.modo_escape:
+            self._mover_aleatorio(mapa, clima_mult, consumo_clima_extra)
+        elif self.objetivo_actual:
+            self._mover_expectimax(mapa, clima_mult, consumo_clima_extra, profundidad=2)
+        else:
+            self._mover_aleatorio(mapa, clima_mult, consumo_clima_extra)
+
+    def _mover_expectimax(self, mapa, clima_mult, consumo_clima_extra, profundidad=2):
+        """Usa Expectimax para decidir el mejor movimiento a varias profundidades.
+
+         Args:
+            mapa: Matriz del mapa
+            clima_mult: Multiplicador de velocidad por clima
+            consumo_clima_extra: Consumo extra de resistencia
+        """
+        direcciones = [(0, -1), (0, 1), (-1, 0), (1, 0)]  # Arriba, abajo, izquierda, derecha
+        mejor_valor = float('-inf')
+        mejor_movimiento = None
+
+        for dx, dy in direcciones:
+            nx, ny = self.x + dx, self.y + dy
+
+            if not (0 <= nx < len(mapa[0]) and 0 <= ny < len(mapa)):
+                continue
+            if mapa[ny][nx] == "B":
+                continue
+
+            valor = self._expectimax_valor(mapa, nx, ny, profundidad - 1, es_turno_cpu=False)
+            if valor > mejor_valor:
+                mejor_valor = valor
+                mejor_movimiento = (dx, dy)
+
+        # Ejecutar mejor movimiento encontrado
+        if mejor_movimiento:
+            dx, dy = mejor_movimiento
+            self.mover(dx, dy, mapa, clima_mult, consumo_clima_extra)
+        else:
+            self._mover_aleatorio(mapa, clima_mult, consumo_clima_extra)
+
+    def _expectimax_valor(self, mapa, x, y, profundidad, es_turno_cpu):
+        """Evalúa el valor esperado recursivamente."""
+        if profundidad == 0 or not self.objetivo_actual:
+            return -self._distancia_objetivo(x, y)
+
+        if es_turno_cpu:
+            # CPU elige el mejor movimiento (MAX node)
+            mejor = float('-inf')
+            for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
+                nx, ny = x + dx, y + dy
+                if not (0 <= nx < len(mapa[0]) and 0 <= ny < len(mapa)):
+                    continue
+                if mapa[ny][nx] == "B":
+                    continue
+                valor = self._expectimax_valor(mapa, nx, ny, profundidad - 1, es_turno_cpu=False)
+                mejor = max(mejor, valor)
+            return mejor
+        else:
+            # Turno "aleatorio" (CHANCE node): se asume que puede moverse a cualquiera de 4 direcciones con igual probabilidad
+            total = 0
+            count = 0
+            for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
+                nx, ny = x + dx, y + dy
+                if not (0 <= nx < len(mapa[0]) and 0 <= ny < len(mapa)):
+                    continue
+                if mapa[ny][nx] == "B":
+                    continue
+                total += self._expectimax_valor(mapa, nx, ny, profundidad - 1, es_turno_cpu=True)
+                count += 1
+            return total / count if count > 0 else -self._distancia_objetivo(x, y)
+
+    def _distancia_objetivo(self, x, y):
+        """Calcula la distancia al objetivo actual."""
+        if not self.objetivo_actual:
+            return 9999
+        ox, oy = self.objetivo_actual
+        return abs(ox - x) + abs(oy - y)
+
+    def _elegir_objetivo_expectimax(self, pedidos_activos):
+        """Elige el pedido con mejor valor esperado (distancia + prioridad)."""
+        if self.inventario:
+            pedido_prioritario = max(self.inventario, key=lambda p: p.priority)
+            self.objetivo_actual = pedido_prioritario.dropoff
+            return
+
+        if not pedidos_activos:
+            self.objetivo_actual = None
+            return
+
+        # Combinar distancia y prioridad
+        def valor(p):
+            px, py = p.pickup
+            dist = abs(px - self.x) + abs(py - self.y)
+            return p.priority * 10 - dist  # más prioridad, menos distancia
+
+        mejor_pedido = max(pedidos_activos, key=valor)
+        self.objetivo_actual = mejor_pedido.pickup
 
     # ========================================
     # NIVEL DIFÍCIL - A*/DIJKSTRA (TODO)
