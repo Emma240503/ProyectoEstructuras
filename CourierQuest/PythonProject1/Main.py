@@ -12,6 +12,7 @@ import pygame
 import time
 import api
 from jugador import Jugador
+from jugador_cpu import JugadorCPU
 from mapa import cargar_mapa, dibujar_mapa
 from pedidos import reubicar_pedidos, asignar_posicion_aleatoria
 from clases import ColaPedidos, Pedido
@@ -42,6 +43,15 @@ player_image = pygame.image.load("assets/repartidor.png").convert_alpha()
 player_image = pygame.transform.scale(player_image, (tile_size, tile_size))
 direccion_der = True  # La direccion a la que apunta el repartidor.
 player_imagen_flip = pygame.transform.flip(player_image, True, False)
+
+# --- Cargar imagen del CPU ---
+try:
+    cpu_image = pygame.image.load("assets/repartidor_cpu.png").convert_alpha()
+    cpu_image = pygame.transform.scale(cpu_image, (tile_size, tile_size))
+except:
+    # Si no existe la imagen, usar la del jugador con tinte rojo
+    cpu_image = player_image.copy()
+    cpu_image.fill((255, 100, 100, 128), special_flags=pygame.BLEND_RGBA_MULT)
 
 # --- Cargar imágenes de pedidos y puntos de entrega ---
 pickup_image = pygame.image.load("assets/pedido_pickup.png").convert_alpha()
@@ -138,9 +148,7 @@ def reiniciar_juego():
 
     # Crear jugador CPU según dificultad
     if dificultad_ia and dificultad_ia != 'sin_ia':
-        # TODO: Aquí crear JugadorCPU cuando lo implementemos
-        # jugador_cpu = JugadorCPU(map_width - 1, map_height - 1, dificultad_ia)
-        jugador_cpu = None  # Por ahora
+        jugador_cpu = JugadorCPU(map_width - 1, map_height - 1, dificultad_ia, capacidad=10)
         print(f"CPU creado con dificultad: {dificultad_ia}")
     else:
         jugador_cpu = None
@@ -174,18 +182,45 @@ def mostrar_pantalla_final(ganado, puntaje_info):
     screen.fill((0, 0, 0))
     font_titulo = pygame.font.SysFont(None, 48)
     font_texto = pygame.font.SysFont(None, 24)
+    font_small = pygame.font.SysFont(None, 20)
 
     if ganado:
         titulo = font_titulo.render("¡VICTORIA!", True, (0, 255, 0))
-        subtitulo = font_texto.render(
-            f"Meta alcanzada: ${meta_ingresos}",
-            True, (255, 255, 255))
+        # Determinar motivo de victoria
+        if jugador.puntaje >= meta_ingresos:
+            if jugador_cpu and jugador_cpu.puntaje >= meta_ingresos:
+                subtitulo = font_texto.render(
+                    f"¡Ambos alcanzaron la meta! Ganaste por ${jugador.puntaje - jugador_cpu.puntaje}",
+                    True, (255, 255, 255))
+            else:
+                subtitulo = font_texto.render(
+                    f"Meta alcanzada: ${meta_ingresos}",
+                    True, (255, 255, 255))
+        else:
+            # Victoria por tiempo
+            if jugador_cpu:
+                subtitulo = font_texto.render(
+                    f"¡Ganaste por puntos! Tu: ${jugador.puntaje} vs CPU: ${jugador_cpu.puntaje}",
+                    True, (255, 255, 255))
+            else:
+                subtitulo = font_texto.render(
+                    f"¡Completaste el juego!",
+                    True, (255, 255, 255))
     else:
         titulo = font_titulo.render("GAME OVER", True, (255, 0, 0))
+        # Determinar motivo de derrota
         if jugador.reputacion <= 20:
             subtitulo = font_texto.render(
                 "Reputación muy baja", True,
                 (255, 255, 255))
+        elif jugador_cpu and jugador_cpu.puntaje >= meta_ingresos:
+            subtitulo = font_texto.render(
+                f"¡El CPU ganó! CPU: ${jugador_cpu.puntaje} vs Tu: ${jugador.puntaje}",
+                True, (255, 255, 255))
+        elif jugador_cpu and jugador_cpu.puntaje > jugador.puntaje:
+            subtitulo = font_texto.render(
+                f"El CPU ganó por puntos: ${jugador_cpu.puntaje} vs ${jugador.puntaje}",
+                True, (255, 255, 255))
         else:
             subtitulo = font_texto.render(
                 "Tiempo agotado", True,
@@ -204,12 +239,24 @@ def mostrar_pantalla_final(ganado, puntaje_info):
         f"Bonus Meta: +{desglose['bonus_meta']}",
         f"Penalizaciones: -{desglose['penalizaciones']}",
         "",
+        "=== TU RENDIMIENTO ===",
         f"Entregas: {jugador.entregas_completadas}",
         f"Reputación Final: {jugador.reputacion}",
         f"Dinero Ganado: ${jugador.puntaje}",
-        "",
-        "Presiona ESC para volver al menú..."
     ]
+
+    # Agregar info del CPU si existe
+    if jugador_cpu:
+        textos.extend([
+            "",
+            "=== RENDIMIENTO CPU ===",
+            f"Entregas: {jugador_cpu.entregas_completadas}",
+            f"Reputación Final: {jugador_cpu.reputacion}",
+            f"Dinero Ganado: ${jugador_cpu.puntaje}",
+        ])
+
+    textos.append("")
+    textos.append("Presiona ESC para volver al menú...")
 
     # --- Centrar y mostrar textos ---
     titulo_rect = titulo.get_rect(center=(screen.get_width() // 2, 50))
@@ -278,10 +325,15 @@ def mostrar_hud_mejorado():
         f"Estado: {estado_resistencia}", True, color_estado),
         (10, 170))
 
+    # --- Info del CPU ---
+    if jugador_cpu:
+        cpu_info = f"CPU: ${jugador_cpu.puntaje} | Rep: {jugador_cpu.reputacion} | Entregas: {jugador_cpu.entregas_completadas}"
+        screen.blit(font_small.render(cpu_info, True, (255, 150, 50)), (10, 195))
+
     # --- Mostrar estadísticas ---
     if mostrar_estadisticas:
         estadisticas = jugador.obtener_estadisticas()
-        y = 200  # O la posición que prefieras
+        y = 220  # Ajustado para dar espacio al CPU
         font_estad = pygame.font.SysFont(None, 22)
         for clave, valor in estadisticas.items():
             texto = (f"{clave.replace('_', ' ').capitalize()}:"
@@ -419,23 +471,53 @@ while running:
         sistema_clima.actualizar()
         jugador.recuperar()
 
+        # Actualizar CPU si existe
+        if jugador_cpu and not juego_terminado:
+            clima_mult = sistema_clima.obtener_multiplicador_actual()
+            consumo_clima_extra = sistema_clima.obtener_consumo_resistencia_extra()
+            jugador_cpu.actualizar(tiles, pedidos_activos, clima_mult, consumo_clima_extra)
+
         # Guardar estado para deshacer (cada 2 segundos para no saturar memoria)
         if int(tiempo_transcurrido) % 2 == 0 and tiempo_transcurrido > 1:
             historial_movimientos.guardar_estado(jugador, pedidos_activos, ahora)
 
         # Condiciones de finalización del juego
         if not juego_terminado:
-            # Victoria por meta alcanzada
+            # Victoria del jugador por meta alcanzada
             if jugador.puntaje >= meta_ingresos:
-                juego_terminado = True
-                juego_ganado = True
-                tiempo_final = tiempo_transcurrido
+                # Verificar si el CPU también alcanzó la meta
+                if jugador_cpu and jugador_cpu.puntaje >= meta_ingresos:
+                    # Ambos alcanzaron la meta, gana quien tenga más dinero
+                    if jugador.puntaje > jugador_cpu.puntaje:
+                        juego_terminado = True
+                        juego_ganado = True
+                        tiempo_final = tiempo_transcurrido
+                    else:
+                        juego_terminado = True
+                        juego_ganado = False
+                        tiempo_final = tiempo_transcurrido
+                else:
+                    # Solo el jugador alcanzó la meta
+                    juego_terminado = True
+                    juego_ganado = True
+                    tiempo_final = tiempo_transcurrido
 
-            # Derrota por tiempo
-            elif tiempo_transcurrido >= duracion:
+            # Derrota por CPU alcanzó la meta primero
+            elif jugador_cpu and jugador_cpu.puntaje >= meta_ingresos:
                 juego_terminado = True
                 juego_ganado = False
+                tiempo_final = tiempo_transcurrido
+
+            # Fin del tiempo: comparar puntajes
+            elif tiempo_transcurrido >= duracion:
+                juego_terminado = True
                 tiempo_final = duracion
+                # Si hay CPU, comparar puntajes
+                if jugador_cpu:
+                    juego_ganado = jugador.puntaje > jugador_cpu.puntaje
+                else:
+                    # Sin CPU, solo perder si no alcanzó la meta
+                    juego_ganado = jugador.puntaje >= meta_ingresos
 
             # Derrota por reputación
             elif jugador.reputacion <= 20:
@@ -473,6 +555,9 @@ while running:
                 ids_activos.add(getattr(ped, 'id', None))
             for ped in jugador.inventario:
                 ids_activos.add(getattr(ped, 'id', None))
+            if jugador_cpu:
+                for ped in jugador_cpu.inventario:
+                    ids_activos.add(getattr(ped, 'id', None))
 
             # Limpiar pedidos_vistos manteniendo solo los activos
             pedidos_vistos = ids_activos
@@ -500,6 +585,11 @@ while running:
                         ocupadas.add(tuple(ped.pickup))
                         ocupadas.add(tuple(ped.dropoff))
                     ocupadas.add((jugador.x, jugador.y))
+                    if jugador_cpu:
+                        ocupadas.add((jugador_cpu.x, jugador_cpu.y))
+                        for ped in jugador_cpu.inventario:
+                            ocupadas.add(tuple(ped.pickup))
+                            ocupadas.add(tuple(ped.dropoff))
 
                     # Asignar posiciones aleatorias con separación
                     pickup_pos = asignar_posicion_aleatoria(tiles, ocupadas, separacion=4)
@@ -607,10 +697,15 @@ while running:
                                      obtener_consumo_resistencia_extra())
                     jugador.mover(dx, dy, tiles, clima_mult, consumo_clima)
 
-        # --- Revisar pickups ---
+        # --- Revisar pickups (ambos jugadores) ---
         for pedido in list(pedidos_activos):
+            # Jugador humano
             if [jugador.x, jugador.y] == pedido.pickup:
                 if jugador.recoger_pedido(pedido):
+                    pedidos_activos.remove(pedido)
+            # Jugador CPU
+            elif jugador_cpu and [jugador_cpu.x, jugador_cpu.y] == pedido.pickup:
+                if jugador_cpu.recoger_pedido(pedido):
                     pedidos_activos.remove(pedido)
 
         # --- Revisar dropoffs ---
@@ -618,6 +713,13 @@ while running:
         if entregado:
             print(f"Pedido entregado - Puntaje: {jugador.puntaje},"
                   f" Reputación: {jugador.reputacion}")
+
+        # Entregar pedidos del CPU
+        if jugador_cpu:
+            entregado_cpu = jugador_cpu.entregar_pedido()
+            if entregado_cpu:
+                print(f"CPU entregó pedido - Puntaje: {jugador_cpu.puntaje},"
+                      f" Reputación: {jugador_cpu.reputacion}")
 
         # --- Renderizado ---
         # Cámara
@@ -637,35 +739,32 @@ while running:
                 screen.blit(pickup_image,
                             ((px - cam_x) * tile_size,
                              (py - cam_y) * tile_size))
-                # Agrega imagen
 
-            # --- Leyenda de prioridades arriba a la izquierda ---
-            leyenda_size = 26
-            dropoff_prioridad_img_scaled = \
-                pygame.transform.scale(dropoff_prioridad_image,
-                                       (leyenda_size, leyenda_size))
-            dropoff_normal_img_scaled = \
-                pygame.transform.scale(dropoff_normal_image,
-                                       (leyenda_size, leyenda_size))
+        # --- Leyenda de prioridades arriba a la izquierda ---
+        leyenda_size = 26
+        dropoff_prioridad_img_scaled = \
+            pygame.transform.scale(dropoff_prioridad_image,
+                                   (leyenda_size, leyenda_size))
+        dropoff_normal_img_scaled = \
+            pygame.transform.scale(dropoff_normal_image,
+                                   (leyenda_size, leyenda_size))
 
-            font = pygame.font.SysFont(None, 26)
-            if dropoff_prioridad_img_scaled:
-                screen.blit(dropoff_prioridad_img_scaled, (5, 5))
-            else:
-                pygame.draw.rect(screen, (255, 0, 0), (10, 10, 20, 20))
-                # Fallback
-            screen.blit(font.render("Prioridad máxima",
-                                    True, (255, 255, 255)), (35, 10))
+        font = pygame.font.SysFont(None, 26)
+        if dropoff_prioridad_img_scaled:
+            screen.blit(dropoff_prioridad_img_scaled, (5, 5))
+        else:
+            pygame.draw.rect(screen, (255, 0, 0), (10, 10, 20, 20))
+        screen.blit(font.render("Prioridad máxima",
+                                True, (255, 255, 255)), (35, 10))
 
-            if dropoff_normal_img_scaled:
-                screen.blit(dropoff_normal_img_scaled, (5, 30))
-            else:
-                pygame.draw.rect(screen, (255, 105, 180), (10, 40, 20, 20))
-                # Fallback
-            screen.blit(font.render("Prioridad normal", True,
-                                    (255, 255, 255)), (35, 40))
+        if dropoff_normal_img_scaled:
+            screen.blit(dropoff_normal_img_scaled, (5, 30))
+        else:
+            pygame.draw.rect(screen, (255, 105, 180), (10, 40, 20, 20))
+        screen.blit(font.render("Prioridad normal", True,
+                                (255, 255, 255)), (35, 40))
 
-        # Dropoffs del inventario
+        # Dropoffs del inventario del jugador
         for pedido in jugador.inventario:
             dx, dy = pedido.dropoff
             if (cam_x <= dx < cam_x + view_width and
@@ -679,6 +778,21 @@ while running:
                     imagen_dropoff, ((dx - cam_x) *
                                      tile_size, (dy - cam_y) * tile_size))
 
+        # Dropoffs del inventario del CPU
+        if jugador_cpu:
+            for pedido in jugador_cpu.inventario:
+                dx, dy = pedido.dropoff
+                if (cam_x <= dx < cam_x + view_width and
+                        cam_y <= dy < cam_y + view_height):
+                    if pedido.priority >= 1:
+                        imagen_dropoff = dropoff_prioridad_image
+                    else:
+                        imagen_dropoff = dropoff_normal_image
+
+                    screen.blit(
+                        imagen_dropoff, ((dx - cam_x) *
+                                         tile_size, (dy - cam_y) * tile_size))
+
         # Jugador
         # ---Cambia la direccion del jugador ---
         if direccion_der:
@@ -689,6 +803,15 @@ while running:
             screen.blit(
                 player_imagen_flip, ((jugador.x - cam_x) *
                                      tile_size, (jugador.y - cam_y) * tile_size))
+
+        # Dibujar CPU si existe
+        if jugador_cpu:
+            cpu_cam_x = jugador_cpu.x - cam_x
+            cpu_cam_y = jugador_cpu.y - cam_y
+
+            # Solo dibujar si está visible en la cámara
+            if (0 <= cpu_cam_x < view_width and 0 <= cpu_cam_y < view_height):
+                screen.blit(cpu_image, (cpu_cam_x * tile_size, cpu_cam_y * tile_size))
 
         # UI
         mostrar_hud_mejorado()
