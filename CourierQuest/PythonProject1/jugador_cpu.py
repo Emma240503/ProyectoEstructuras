@@ -111,14 +111,13 @@ class JugadorCPU(Jugador):
 
             # Si ha estado en la misma posición 3+ veces en las últimas 6 posiciones
             if repeticiones >= 3:
-                print(f"⚠️ CPU detectó bucle en ({self.x}, {self.y}) - Activando modo escape")
+
                 self.modo_escape = True
                 self.tiempo_escape = ahora
                 self.objetivo_actual = None  # Cambiar de objetivo
 
         # Desactivar modo escape después del tiempo
         if self.modo_escape and (ahora - self.tiempo_escape > self.duracion_escape):
-            print(f"✅ CPU salió del modo escape")
             self.modo_escape = False
             self.historial_posiciones.clear()  # Limpiar historial
 
