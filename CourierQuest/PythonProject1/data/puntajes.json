@@ -1,6 +1,17 @@
 [
   {
     "nombre": "Jugador",
+    "puntaje": 7234,
+    "fecha": "2025-11-10T21:08:01.741728",
+    "timestamp": 1762830481.7417285,
+    "tiempo_total": 230.54323530197144,
+    "entregas_completadas": 25,
+    "reputacion_final": 100,
+    "dinero_ganado": 5751.0,
+    "meta_alcanzada": true
+  },
+  {
+    "nombre": "Jugador",
     "puntaje": 7134,
     "fecha": "2025-10-05T12:55:50.959988",
     "timestamp": 1759690550.959988,
@@ -96,17 +107,6 @@
     "entregas_completadas": 7,
     "reputacion_final": 100,
     "dinero_ganado": 1533.0,
-    "meta_alcanzada": true
-  },
-  {
-    "nombre": "Jugador",
-    "puntaje": 1978,
-    "fecha": "2025-10-01T16:13:22.962418",
-    "timestamp": 1759356802.9634264,
-    "tiempo_total": 100.43039417266846,
-    "entregas_completadas": 7,
-    "reputacion_final": 91,
-    "dinero_ganado": 1542.0,
     "meta_alcanzada": true
   }
 ]

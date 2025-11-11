@@ -17,20 +17,25 @@ from pedidos import reubicar_pedidos, asignar_posicion_aleatoria
 from clases import ColaPedidos, Pedido
 from clima import SistemaClima
 from persistencia import SistemaPersistencia, HistorialMovimientos
-
+from menu import Menu, MenuPausa
 
 pygame.init()
 clock = pygame.time.Clock()
 
+# --- Estados del juego ---
+MENU = 0
+JUGANDO = 1
+PAUSADO = 2
+GAME_OVER = 3
+
 # --- Configuración ---
 tile_size = 60
-view_width, view_height = 13, 13   # Tamaño original de la ventan 16,16.
+view_width, view_height = 13, 13  # Tamaño original de la ventan 16,16.
 screen = pygame.display.set_mode((view_width * tile_size,
                                   view_height * tile_size))
 pygame.display.set_caption("Courier Quest - Mapa")
 
 colors = {"C": (200, 200, 200), "B": (0, 0, 0), "P": (0, 200, 0)}
-
 
 # --- Cargar imagen del jugador ---
 player_image = pygame.image.load("assets/repartidor.png").convert_alpha()
@@ -58,7 +63,6 @@ parque_image = pygame.transform.scale(parque_image, (tile_size, tile_size))
 edificio_image = pygame.image.load("assets/Edificio.jpg").convert()
 edificio_image = pygame.transform.scale(edificio_image, (tile_size, tile_size))
 
-
 imagenes_tiles = {  # Se guardan las imagenes
     "C": calle_image,
     "P": parque_image,
@@ -69,6 +73,15 @@ imagenes_tiles = {  # Se guardan las imagenes
 sistema_clima = SistemaClima(api)
 sistema_persistencia = SistemaPersistencia()
 historial_movimientos = HistorialMovimientos()
+
+# --- Inicializar menús ---
+menu_principal = Menu(screen)
+menu_pausa = MenuPausa(screen)
+
+# --- Variables globales del juego ---
+estado_juego = MENU
+dificultad_ia = None
+jugador_cpu = None
 
 # --- Cargar mapa y pedidos iniciales ---
 tiles = cargar_mapa(api)
@@ -111,6 +124,51 @@ mostrar_estadisticas = False
 ordendar_inventario = False
 
 
+def reiniciar_juego():
+    """Reinicia todas las variables del juego para una nueva partida."""
+    global jugador, jugador_cpu, pedidos_activos, pedidos_vistos
+    global tiempo_inicio, juego_terminado, juego_ganado, puntaje_calculado
+    global ultimo_check, ultimo_liberado, ultimo_limpieza_vistos
+    global cola_pedidos, pedidos_data, mostrar_inventario_detallado
+    global mostrar_estadisticas, ordendar_inventario, direccion_der
+
+    # Reiniciar jugador humano
+    jugador = Jugador(0, 0)
+    direccion_der = True
+
+    # Crear jugador CPU según dificultad
+    if dificultad_ia and dificultad_ia != 'sin_ia':
+        # TODO: Aquí crear JugadorCPU cuando lo implementemos
+        # jugador_cpu = JugadorCPU(map_width - 1, map_height - 1, dificultad_ia)
+        jugador_cpu = None  # Por ahora
+        print(f"CPU creado con dificultad: {dificultad_ia}")
+    else:
+        jugador_cpu = None
+
+    # Reiniciar pedidos
+    pedidos_data = api.obtener_pedidos()["data"]
+    reubicar_pedidos(pedidos_data, tiles)
+    cola_pedidos = ColaPedidos(pedidos_data)
+    pedidos_activos = []
+    pedidos_vistos = set()
+
+    # Reiniciar tiempos
+    tiempo_inicio = time.time()
+    ultimo_check = time.time()
+    ultimo_liberado = 0
+    ultimo_limpieza_vistos = time.time()
+
+    # Reiniciar estado
+    juego_terminado = False
+    juego_ganado = False
+    puntaje_calculado = None
+    mostrar_inventario_detallado = False
+    mostrar_estadisticas = False
+    ordendar_inventario = False
+
+    print("Juego reiniciado")
+
+
 def mostrar_pantalla_final(ganado, puntaje_info):
     """Muestra la pantalla final del juego."""
     screen.fill((0, 0, 0))
@@ -150,7 +208,7 @@ def mostrar_pantalla_final(ganado, puntaje_info):
         f"Reputación Final: {jugador.reputacion}",
         f"Dinero Ganado: ${jugador.puntaje}",
         "",
-        "Presiona ESC para continuar..."
+        "Presiona ESC para volver al menú..."
     ]
 
     # --- Centrar y mostrar textos ---
@@ -169,8 +227,6 @@ def mostrar_pantalla_final(ganado, puntaje_info):
             rendered_rect = rendered.get_rect(
                 center=(screen.get_width() // 2, y_offset + i * 25))
             screen.blit(rendered, rendered_rect)
-
-    # --- Interfaz de usuario mejorada ---
 
 
 def mostrar_hud_mejorado():
@@ -229,13 +285,11 @@ def mostrar_hud_mejorado():
         font_estad = pygame.font.SysFont(None, 22)
         for clave, valor in estadisticas.items():
             texto = (f"{clave.replace('_', ' ').capitalize()}:"
-                     f" {valor:.2f}") if isinstance(valor, float)\
+                     f" {valor:.2f}") if isinstance(valor, float) \
                 else f"{clave.replace('_', ' ').capitalize()}: {valor}"
             texto_render = font_estad.render(texto, True, (0, 0, 0))
             screen.blit(texto_render, (10, y))
             y += 25
-
-    # --- Mostrar inventario ---
 
 
 def mostrar_inventario_detallado_ui():
@@ -294,376 +348,428 @@ def mostrar_inventario_detallado_ui():
             screen.blit(rendered, (210, y_offset + i * 20))
 
 
-
 # --- Bucle principal ---
 running = True
 while running:
-    ahora = time.time()
-    tiempo_transcurrido = ahora - tiempo_inicio
 
-    # Actualizar sistemas
-    sistema_clima.actualizar()
-    jugador.recuperar()
+    # ==========================================
+    # ===== ESTADO: MENÚ PRINCIPAL =====
+    # ==========================================
+    if estado_juego == MENU:
+        menu_principal.mostrar()
 
-    # Guardar estado para deshacer (cada 2 segundos para no saturar memoria)
-    if int(tiempo_transcurrido) % 2 == 0 and tiempo_transcurrido > 1:
-        historial_movimientos.guardar_estado(jugador, pedidos_activos, ahora)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
 
-    # Condiciones de finalización del juego
-    if not juego_terminado:
-        # Victoria por meta alcanzada
-        if jugador.puntaje >= meta_ingresos:
-            juego_terminado = True
-            juego_ganado = True
-            tiempo_final = tiempo_transcurrido
+            # Procesar selección de dificultad
+            dificultad_seleccionada = menu_principal.procesar_input(event)
+            if dificultad_seleccionada:
+                dificultad_ia = dificultad_seleccionada
+                reiniciar_juego()
+                estado_juego = JUGANDO
+                print(f"Juego iniciado con dificultad: {dificultad_ia}")
 
-        # Derrota por tiempo
-        elif tiempo_transcurrido >= duracion:
-            juego_terminado = True
-            juego_ganado = False
-            tiempo_final = duracion
+        clock.tick(60)
+        continue
 
-        # Derrota por reputación
-        elif jugador.reputacion <= 20:
-            juego_terminado = True
-            juego_ganado = False
-            tiempo_final = tiempo_transcurrido
+    # ==========================================
+    # ===== ESTADO: PAUSADO =====
+    # ==========================================
+    elif estado_juego == PAUSADO:
+        menu_pausa.mostrar()
 
-        # Si el juego acaba de terminar, calcular puntaje
-        if juego_terminado and puntaje_calculado is None:
-            puntaje_calculado = sistema_persistencia.calcular_puntaje_final(
-                jugador, tiempo_final, duracion, meta_ingresos
-            )
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_p:
+                    estado_juego = JUGANDO
+                elif event.key == pygame.K_ESCAPE:
+                    estado_juego = MENU
 
-            # Guardar puntaje
-            sistema_persistencia.guardar_puntaje(
-                "Jugador",
-                puntaje_calculado['puntaje_final'],
-                {
-                    'tiempo_total': tiempo_final,
-                    'entregas_completadas': jugador.entregas_completadas,
-                    'reputacion_final': jugador.reputacion,
-                    'dinero_ganado': jugador.puntaje,
-                    'meta_alcanzada': juego_ganado
-                }
-            )
+        clock.tick(60)
+        continue
 
-    # Si el juego terminó, mostrar pantalla final
-    if juego_terminado:
+    # ==========================================
+    # ===== ESTADO: GAME OVER =====
+    # ==========================================
+    elif estado_juego == GAME_OVER:
         mostrar_pantalla_final(juego_ganado, puntaje_calculado)
         pygame.display.flip()
 
-        # Esperar a que presione ESC para salir
         for event in pygame.event.get():
-            if (event.type == pygame.QUIT
-                    or (event.type == pygame.KEYDOWN
-                        and event.key == pygame.K_ESCAPE)):
+            if event.type == pygame.QUIT:
                 running = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    estado_juego = MENU
+
+        clock.tick(60)
         continue
-    # --- Limpiar pedidos vistos periódicamente ---
-    if ahora - ultimo_limpieza_vistos >= intervalo_limpieza:
 
-        ids_activos = set()
-        for ped in pedidos_activos:
-            ids_activos.add(getattr(ped, 'id', None))
-        for ped in jugador.inventario:
-            ids_activos.add(getattr(ped, 'id', None))
+    # ==========================================
+    # ===== ESTADO: JUGANDO =====
+    # ==========================================
+    elif estado_juego == JUGANDO:
+        ahora = time.time()
+        tiempo_transcurrido = ahora - tiempo_inicio
 
-        # Limpiar pedidos_vistos manteniendo solo los activos
-        pedidos_vistos = ids_activos
-        ultimo_limpieza_vistos = ahora
+        # Actualizar sistemas
+        sistema_clima.actualizar()
+        jugador.recuperar()
 
-    # --- Chequear nuevos pedidos (solo si juego activo) ---
-    if ahora - ultimo_check >= check_interval:
-        try:
-            resp = api.obtener_pedidos()
-            nuevos_pedidos_data = resp.get("data", []) if isinstance(resp, dict) else resp
-        except Exception as e:
-            print("Error al obtener pedidos de la API:", e)
-            nuevos_pedidos_data = []
+        # Guardar estado para deshacer (cada 2 segundos para no saturar memoria)
+        if int(tiempo_transcurrido) % 2 == 0 and tiempo_transcurrido > 1:
+            historial_movimientos.guardar_estado(jugador, pedidos_activos, ahora)
 
-        for p in nuevos_pedidos_data:
-            # Verificar duplicados usando el ID si existe
-            pedido_id = p.get("id", f"{p['pickup']}-{p['dropoff']}")
+        # Condiciones de finalización del juego
+        if not juego_terminado:
+            # Victoria por meta alcanzada
+            if jugador.puntaje >= meta_ingresos:
+                juego_terminado = True
+                juego_ganado = True
+                tiempo_final = tiempo_transcurrido
 
-            if pedido_id not in pedidos_vistos:
-                pedidos_vistos.add(pedido_id)
+            # Derrota por tiempo
+            elif tiempo_transcurrido >= duracion:
+                juego_terminado = True
+                juego_ganado = False
+                tiempo_final = duracion
 
-                # Obtener casillas ocupadas
-                ocupadas = set()
-                for ped in pedidos_activos + list(jugador.inventario):
-                    ocupadas.add(tuple(ped.pickup))
-                    ocupadas.add(tuple(ped.dropoff))
-                ocupadas.add((jugador.x, jugador.y))
+            # Derrota por reputación
+            elif jugador.reputacion <= 20:
+                juego_terminado = True
+                juego_ganado = False
+                tiempo_final = tiempo_transcurrido
 
-                # Asignar posiciones aleatorias con separación
-                pickup_pos = asignar_posicion_aleatoria(tiles, ocupadas, separacion=4)
-                if pickup_pos:
-                    p["pickup"] = pickup_pos
-                    ocupadas.add(tuple(pickup_pos))
-                else:
-                    # Si no hay espacio con sep=4, intentar con sep=2
-                    pickup_pos = asignar_posicion_aleatoria(tiles, ocupadas, separacion=2)
+            # Si el juego acaba de terminar, calcular puntaje
+            if juego_terminado and puntaje_calculado is None:
+                puntaje_calculado = sistema_persistencia.calcular_puntaje_final(
+                    jugador, tiempo_final, duracion, meta_ingresos
+                )
+
+                # Guardar puntaje
+                sistema_persistencia.guardar_puntaje(
+                    "Jugador",
+                    puntaje_calculado['puntaje_final'],
+                    {
+                        'tiempo_total': tiempo_final,
+                        'entregas_completadas': jugador.entregas_completadas,
+                        'reputacion_final': jugador.reputacion,
+                        'dinero_ganado': jugador.puntaje,
+                        'meta_alcanzada': juego_ganado
+                    }
+                )
+
+                estado_juego = GAME_OVER
+                continue
+
+        # --- Limpiar pedidos vistos periódicamente ---
+        if ahora - ultimo_limpieza_vistos >= intervalo_limpieza:
+
+            ids_activos = set()
+            for ped in pedidos_activos:
+                ids_activos.add(getattr(ped, 'id', None))
+            for ped in jugador.inventario:
+                ids_activos.add(getattr(ped, 'id', None))
+
+            # Limpiar pedidos_vistos manteniendo solo los activos
+            pedidos_vistos = ids_activos
+            ultimo_limpieza_vistos = ahora
+
+        # --- Chequear nuevos pedidos (solo si juego activo) ---
+        if ahora - ultimo_check >= check_interval:
+            try:
+                resp = api.obtener_pedidos()
+                nuevos_pedidos_data = resp.get("data", []) if isinstance(resp, dict) else resp
+            except Exception as e:
+                print("Error al obtener pedidos de la API:", e)
+                nuevos_pedidos_data = []
+
+            for p in nuevos_pedidos_data:
+                # Verificar duplicados usando el ID si existe
+                pedido_id = p.get("id", f"{p['pickup']}-{p['dropoff']}")
+
+                if pedido_id not in pedidos_vistos:
+                    pedidos_vistos.add(pedido_id)
+
+                    # Obtener casillas ocupadas
+                    ocupadas = set()
+                    for ped in pedidos_activos + list(jugador.inventario):
+                        ocupadas.add(tuple(ped.pickup))
+                        ocupadas.add(tuple(ped.dropoff))
+                    ocupadas.add((jugador.x, jugador.y))
+
+                    # Asignar posiciones aleatorias con separación
+                    pickup_pos = asignar_posicion_aleatoria(tiles, ocupadas, separacion=4)
                     if pickup_pos:
                         p["pickup"] = pickup_pos
                         ocupadas.add(tuple(pickup_pos))
                     else:
-                        print(f"No se pudo asignar pickup para pedido {pedido_id}")
-                        continue
+                        # Si no hay espacio con sep=4, intentar con sep=2
+                        pickup_pos = asignar_posicion_aleatoria(tiles, ocupadas, separacion=2)
+                        if pickup_pos:
+                            p["pickup"] = pickup_pos
+                            ocupadas.add(tuple(pickup_pos))
+                        else:
+                            print(f"No se pudo asignar pickup para pedido {pedido_id}")
+                            continue
 
-                dropoff_pos = asignar_posicion_aleatoria(tiles, ocupadas, separacion=4)
-                if dropoff_pos:
-                    p["dropoff"] = dropoff_pos
-                    ocupadas.add(tuple(dropoff_pos))
-                else:
-                    # Si no hay espacio con sep=4, intentar con sep=2
-                    dropoff_pos = asignar_posicion_aleatoria(tiles, ocupadas, separacion=2)
+                    dropoff_pos = asignar_posicion_aleatoria(tiles, ocupadas, separacion=4)
                     if dropoff_pos:
                         p["dropoff"] = dropoff_pos
                         ocupadas.add(tuple(dropoff_pos))
                     else:
-                        print(f"No se pudo asignar dropoff para pedido {pedido_id}")
-                        continue
+                        # Si no hay espacio con sep=4, intentar con sep=2
+                        dropoff_pos = asignar_posicion_aleatoria(tiles, ocupadas, separacion=2)
+                        if dropoff_pos:
+                            p["dropoff"] = dropoff_pos
+                            ocupadas.add(tuple(dropoff_pos))
+                        else:
+                            print(f"No se pudo asignar dropoff para pedido {pedido_id}")
+                            continue
 
-                nuevo_pedido = Pedido(
-                    p["pickup"], p["dropoff"],
-                    p.get("weight", 1),
-                    p.get("priority", 0),
-                    p.get("payout", 100)
-                )
+                    nuevo_pedido = Pedido(
+                        p["pickup"], p["dropoff"],
+                        p.get("weight", 1),
+                        p.get("priority", 0),
+                        p.get("payout", 100)
+                    )
 
-                # Guardar el ID
-                nuevo_pedido.id = pedido_id
+                    # Guardar el ID
+                    nuevo_pedido.id = pedido_id
 
-                cola_pedidos.agregar_pedido(nuevo_pedido)
+                    cola_pedidos.agregar_pedido(nuevo_pedido)
 
+            ultimo_check = ahora
 
-        ultimo_check = ahora
+        # --- Liberar pedidos ---
+        if len(pedidos_activos) < 5 and ahora - ultimo_liberado >= liberar_interval:
+            pedido = cola_pedidos.obtener_siguiente()
+            if pedido:
+                pedidos_activos.append(pedido)
+                ultimo_liberado = ahora
 
-    # --- Liberar pedidos ---
-    if len(pedidos_activos) < 5 and ahora - ultimo_liberado >= liberar_interval:
-        pedido = cola_pedidos.obtener_siguiente()
-        if pedido:
-            pedidos_activos.append(pedido)
-            ultimo_liberado = ahora
+        # --- Eventos ---
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.KEYDOWN:
+                dx = dy = 0
 
-    # --- Eventos ---
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-        elif event.type == pygame.KEYDOWN:
-            dx = dy = 0
+                # Movimiento
+                if event.key == pygame.K_LEFT:
+                    dx = -1
+                    if direccion_der:
+                        direccion_der = False
+                elif event.key == pygame.K_RIGHT:
+                    dx = 1
+                    if not direccion_der:
+                        direccion_der = True
+                elif event.key == pygame.K_UP:
+                    dy = -1
+                elif event.key == pygame.K_DOWN:
+                    dy = 1
 
-            # Movimiento
-            if event.key == pygame.K_LEFT:
-                dx = -1
-                if direccion_der:
-                    direccion_der = False
-            elif event.key == pygame.K_RIGHT:
-                dx = 1
-                if not direccion_der:
-                    direccion_der = True
-            elif event.key == pygame.K_UP:
-                dy = -1
-            elif event.key == pygame.K_DOWN:
-                dy = 1
+                # Acciones especiales
+                elif event.key == pygame.K_q:
+                    jugador.cancelar_ultimo_pedido()
+                elif event.key == pygame.K_u:  # Deshacer
+                    historial_movimientos.deshacer(jugador, pedidos_activos)
+                elif event.key == pygame.K_p:  # PAUSAR
+                    estado_juego = PAUSADO
+                elif (event.key == pygame.K_s and
+                      pygame.key.get_pressed()[pygame.K_LCTRL]):
+                    # Ctrl+S Guardar
+                    estado_actual = {
+                        'jugador': jugador,
+                        'pedidos_activos': pedidos_activos,
+                        'cola_pedidos': cola_pedidos,
+                        'clima': sistema_clima,
+                        'tiempo_inicio': tiempo_inicio,
+                        'tiempo_transcurrido': tiempo_transcurrido,
+                        'mapa': tiles
+                    }
+                    sistema_persistencia.guardar_juego(estado_actual)
+                elif event.key == pygame.K_i:
+                    # Mostrar/ocultar inventario detallado
+                    mostrar_inventario_detallado = not mostrar_inventario_detallado
+                elif event.key == pygame.K_t:  # Mostrar/ocultar estadísticas
+                    mostrar_estadisticas = not mostrar_estadisticas
+                elif event.key == pygame.K_o:  # Ordenar pedidos por plata
+                    ordendar_inventario = not ordendar_inventario
 
-            # Acciones especiales
-            elif event.key == pygame.K_q:
-                jugador.cancelar_ultimo_pedido()
-            elif event.key == pygame.K_u:  # Deshacer
-                historial_movimientos.deshacer(jugador, pedidos_activos)
-            elif (event.key == pygame.K_s and
-                  pygame.key.get_pressed()[pygame.K_LCTRL]):
-                # Ctrl+S Guardar
-                estado_actual = {
-                    'jugador': jugador,
-                    'pedidos_activos': pedidos_activos,
-                    'cola_pedidos': cola_pedidos,
-                    'clima': sistema_clima,
-                    'tiempo_inicio': tiempo_inicio,
-                    'tiempo_transcurrido': tiempo_transcurrido,
-                    'mapa': tiles
-                }
-                sistema_persistencia.guardar_juego(estado_actual)
-            elif event.key == pygame.K_i:
-                # Mostrar/ocultar inventario detallado
-                mostrar_inventario_detallado = not mostrar_inventario_detallado
-            elif event.key == pygame.K_t:  # Mostrar/ocultar estadísticas
-                mostrar_estadisticas = not mostrar_estadisticas
-            elif event.key == pygame.K_o:  # Ordenar pedidos por plata
-                ordendar_inventario = not ordendar_inventario
+                # Realizar movimiento con clima
+                if dx != 0 or dy != 0:
+                    clima_mult = sistema_clima.obtener_multiplicador_actual()
+                    consumo_clima = (sistema_clima.
+                                     obtener_consumo_resistencia_extra())
+                    jugador.mover(dx, dy, tiles, clima_mult, consumo_clima)
 
-            # Realizar movimiento con clima
-            if dx != 0 or dy != 0:
-                clima_mult = sistema_clima.obtener_multiplicador_actual()
-                consumo_clima = (sistema_clima.
-                                 obtener_consumo_resistencia_extra())
-                jugador.mover(dx, dy, tiles, clima_mult, consumo_clima)
+        # --- Revisar pickups ---
+        for pedido in list(pedidos_activos):
+            if [jugador.x, jugador.y] == pedido.pickup:
+                if jugador.recoger_pedido(pedido):
+                    pedidos_activos.remove(pedido)
 
-    # --- Revisar pickups ---
-    for pedido in list(pedidos_activos):
-        if [jugador.x, jugador.y] == pedido.pickup:
-            if jugador.recoger_pedido(pedido):
-                pedidos_activos.remove(pedido)
+        # --- Revisar dropoffs ---
+        entregado = jugador.entregar_pedido()
+        if entregado:
+            print(f"Pedido entregado - Puntaje: {jugador.puntaje},"
+                  f" Reputación: {jugador.reputacion}")
 
-    # --- Revisar dropoffs ---
-    entregado = jugador.entregar_pedido()
-    if entregado:
-        print(f"Pedido entregado - Puntaje: {jugador.puntaje},"
-              f" Reputación: {jugador.reputacion}")
+        # --- Renderizado ---
+        # Cámara
+        cam_x = max(0, min(jugador.x - view_width // 2, map_width - view_width))
+        cam_y = max(0, min(jugador.y - view_height // 2, map_height - view_height))
 
-    # --- Renderizado ---
-    # Cámara
-    cam_x = max(0, min(jugador.x - view_width // 2, map_width - view_width))
-    cam_y = max(0, min(jugador.y - view_height // 2, map_height - view_height))
+        # Dibujar mapa y objetos
+        screen.fill((255, 255, 255))
+        dibujar_mapa(screen, tiles, colors, cam_x, cam_y, tile_size,
+                     view_width, view_height, imagenes_tiles)
 
-    # Dibujar mapa y objetos
-    screen.fill((255, 255, 255))
-    dibujar_mapa(screen, tiles, colors, cam_x, cam_y, tile_size,
-                 view_width, view_height, imagenes_tiles)
+        # Pedidos activos (pickups)
+        for pedido in pedidos_activos:
+            px, py = pedido.pickup
+            if (cam_x <= px < cam_x + view_width and
+                    cam_y <= py < cam_y + view_height):
+                screen.blit(pickup_image,
+                            ((px - cam_x) * tile_size,
+                             (py - cam_y) * tile_size))
+                # Agrega imagen
 
-    # Pedidos activos (pickups)
-    for pedido in pedidos_activos:
-        px, py = pedido.pickup
-        if (cam_x <= px < cam_x + view_width and
-                cam_y <= py < cam_y + view_height):
-            screen.blit(pickup_image,
-                        ((px - cam_x) * tile_size,
-                         (py - cam_y) * tile_size))
-            # Agrega imagen
+            # --- Leyenda de prioridades arriba a la izquierda ---
+            leyenda_size = 26
+            dropoff_prioridad_img_scaled = \
+                pygame.transform.scale(dropoff_prioridad_image,
+                                       (leyenda_size, leyenda_size))
+            dropoff_normal_img_scaled = \
+                pygame.transform.scale(dropoff_normal_image,
+                                       (leyenda_size, leyenda_size))
 
-        # --- Leyenda de prioridades arriba a la izquierda ---
-        leyenda_size = 26
-        dropoff_prioridad_img_scaled =\
-            pygame.transform.scale(dropoff_prioridad_image,
-                                   (leyenda_size, leyenda_size))
-        dropoff_normal_img_scaled =\
-            pygame.transform.scale(dropoff_normal_image,
-                                   (leyenda_size, leyenda_size))
-
-        font = pygame.font.SysFont(None, 26)
-        if dropoff_prioridad_img_scaled:
-            screen.blit(dropoff_prioridad_img_scaled, (5, 5))
-        else:
-            pygame.draw.rect(screen, (255, 0, 0), (10, 10, 20, 20))
-            # Fallback
-        screen.blit(font.render("Prioridad máxima",
-                                True, (255, 255, 255)), (35, 10))
-
-        if dropoff_normal_img_scaled:
-            screen.blit(dropoff_normal_img_scaled, (5, 30))
-        else:
-            pygame.draw.rect(screen, (255, 105, 180), (10, 40, 20, 20))
-            # Fallback
-        screen.blit(font.render("Prioridad normal", True,
-                                (255, 255, 255)), (35, 40))
-
-    # Dropoffs del inventario
-    for pedido in jugador.inventario:
-        dx, dy = pedido.dropoff
-        if (cam_x <= dx < cam_x + view_width and
-                cam_y <= dy < cam_y + view_height):
-            if pedido.priority >= 1:  # Si es prioridad maxima
-                imagen_dropoff = dropoff_prioridad_image
+            font = pygame.font.SysFont(None, 26)
+            if dropoff_prioridad_img_scaled:
+                screen.blit(dropoff_prioridad_img_scaled, (5, 5))
             else:
-                imagen_dropoff = dropoff_normal_image
+                pygame.draw.rect(screen, (255, 0, 0), (10, 10, 20, 20))
+                # Fallback
+            screen.blit(font.render("Prioridad máxima",
+                                    True, (255, 255, 255)), (35, 10))
 
+            if dropoff_normal_img_scaled:
+                screen.blit(dropoff_normal_img_scaled, (5, 30))
+            else:
+                pygame.draw.rect(screen, (255, 105, 180), (10, 40, 20, 20))
+                # Fallback
+            screen.blit(font.render("Prioridad normal", True,
+                                    (255, 255, 255)), (35, 40))
+
+        # Dropoffs del inventario
+        for pedido in jugador.inventario:
+            dx, dy = pedido.dropoff
+            if (cam_x <= dx < cam_x + view_width and
+                    cam_y <= dy < cam_y + view_height):
+                if pedido.priority >= 1:  # Si es prioridad maxima
+                    imagen_dropoff = dropoff_prioridad_image
+                else:
+                    imagen_dropoff = dropoff_normal_image
+
+                screen.blit(
+                    imagen_dropoff, ((dx - cam_x) *
+                                     tile_size, (dy - cam_y) * tile_size))
+
+        # Jugador
+        # ---Cambia la direccion del jugador ---
+        if direccion_der:
             screen.blit(
-                imagen_dropoff, ((dx - cam_x) *
-                                 tile_size, (dy - cam_y) * tile_size))
+                player_image, ((jugador.x - cam_x) *
+                               tile_size, (jugador.y - cam_y) * tile_size))
+        else:
+            screen.blit(
+                player_imagen_flip, ((jugador.x - cam_x) *
+                                     tile_size, (jugador.y - cam_y) * tile_size))
 
-    # Jugador
-    # ---Cambia la direccion del jugador ---
-    if direccion_der:
-        screen.blit(
-            player_image, ((jugador.x - cam_x) *
-                           tile_size, (jugador.y - cam_y) * tile_size))
-    else:
-        screen.blit(
-            player_imagen_flip, ((jugador.x - cam_x) *
-                                 tile_size, (jugador.y - cam_y) * tile_size))
+        # UI
+        mostrar_hud_mejorado()
 
-    # UI
-    mostrar_hud_mejorado()
+        # Barra de resistencia
+        font = pygame.font.SysFont(None, 24)
+        ancho_barra = 200
+        alto_barra = 20
+        x_barra = 10
+        y_barra = screen.get_height() - 80
 
-    # Barra de resistencia
-    font = pygame.font.SysFont(None, 24)
-    ancho_barra = 200
-    alto_barra = 20
-    x_barra = 10
-    y_barra = screen.get_height() - 80
+        porcentaje = max(0, jugador.resistencia / jugador.max_resistencia)
+        ancho_actual = int(ancho_barra * porcentaje)
+        color_barra = (0, 255, 0) \
+            if porcentaje > 0.3 else (255, 255, 0) \
+            if porcentaje > 0.1 else (255, 0, 0)
 
-    porcentaje = max(0, jugador.resistencia / jugador.max_resistencia)
-    ancho_actual = int(ancho_barra * porcentaje)
-    color_barra = (0, 255, 0) \
-        if porcentaje > 0.3 else (255, 255, 0) \
-        if porcentaje > 0.1 else (255, 0, 0)
+        pygame.draw.rect(screen, (100, 100, 100),
+                         (x_barra, y_barra, ancho_barra, alto_barra))
+        pygame.draw.rect(screen, color_barra,
+                         (x_barra, y_barra, ancho_actual, alto_barra))
+        screen.blit(font.render(
+            "Resistencia", True, (0, 0, 0)),
+            (x_barra, y_barra - 20))
 
-    pygame.draw.rect(screen, (100, 100, 100),
-                     (x_barra, y_barra, ancho_barra, alto_barra))
-    pygame.draw.rect(screen, color_barra,
-                     (x_barra, y_barra, ancho_actual, alto_barra))
-    screen.blit(font.render(
-        "Resistencia", True, (0, 0, 0)),
-        (x_barra, y_barra - 20))
+        # Barra de reputación
+        y_barra_rep = screen.get_height() - 30
+        porcentaje_rep = max(0, jugador.reputacion / 100)
+        ancho_actual_rep = int(ancho_barra * porcentaje_rep)
+        color_barra_rep = (255, 0, 0) \
+            if jugador.reputacion <= 30 else (255, 255, 0) \
+            if jugador.reputacion <= 60 else (0, 0, 255)
 
-    # Barra de reputación
-    y_barra_rep = screen.get_height() - 30
-    porcentaje_rep = max(0, jugador.reputacion / 100)
-    ancho_actual_rep = int(ancho_barra * porcentaje_rep)
-    color_barra_rep = (255, 0, 0)\
-        if jugador.reputacion <= 30 else (255, 255, 0)\
-        if jugador.reputacion <= 60 else (0, 0, 255)
+        pygame.draw.rect(screen, (100, 100, 100),
+                         (x_barra, y_barra_rep, ancho_barra, alto_barra))
+        pygame.draw.rect(screen, color_barra_rep,
+                         (x_barra, y_barra_rep, ancho_actual_rep, alto_barra))
+        screen.blit(font.render("Reputación", True,
+                                (0, 0, 0)), (x_barra, y_barra_rep - 20))
 
-    pygame.draw.rect(screen, (100, 100, 100),
-                     (x_barra, y_barra_rep, ancho_barra, alto_barra))
-    pygame.draw.rect(screen, color_barra_rep,
-                     (x_barra, y_barra_rep, ancho_actual_rep, alto_barra))
-    screen.blit(font.render("Reputación", True,
-                            (0, 0, 0)), (x_barra, y_barra_rep - 20))
+        # Cronómetro
+        tiempo_restante = max(0, int(duracion - tiempo_transcurrido))
+        minutos = tiempo_restante // 60
+        segundos = tiempo_restante % 60
+        cronometro_texto = f"Tiempo: {minutos:02d}:{segundos:02d}"
+        font_crono = pygame.font.SysFont(None, 36)
+        color_tiempo = (255, 0, 0) if tiempo_restante < 60 else (0, 0, 0)
+        screen.blit(font_crono.render(cronometro_texto, True, color_tiempo),
+                    (screen.get_width() - 180, 10))
 
-    # Cronómetro
-    tiempo_restante = max(0, int(duracion - tiempo_transcurrido))
-    minutos = tiempo_restante // 60
-    segundos = tiempo_restante % 60
-    cronometro_texto = f"Tiempo: {minutos:02d}:{segundos:02d}"
-    font_crono = pygame.font.SysFont(None, 36)
-    color_tiempo = (255, 0, 0) if tiempo_restante < 60 else (0, 0, 0)
-    screen.blit(font_crono.render(cronometro_texto, True, color_tiempo),
-                (screen.get_width() - 180, 10))
+        # Mostrar mensajes temporales
+        if jugador.mensaje and time.time() - jugador.mensaje_tiempo < 3:
+            font_msg = pygame.font.SysFont(None, 28)
+            aviso = font_msg.render(
+                jugador.mensaje, True, (0, 0, 0))
+            screen.blit(aviso, (10, screen.get_height() - 130))
 
-    # Mostrar mensajes temporales
-    if jugador.mensaje and time.time() - jugador.mensaje_tiempo < 3:
-        font_msg = pygame.font.SysFont(None, 28)
-        aviso = font_msg.render(
-            jugador.mensaje, True, (0, 0, 0))
-        screen.blit(aviso, (10, screen.get_height() - 130))
+        # Mensaje de energía
+        if jugador.bloqueado:
+            font_msg = pygame.font.SysFont(None, 36)
+            aviso = font_msg.render(
+                "¡Sin energía! Descansando...", True, (255, 0, 0))
+            screen.blit(aviso, (10, screen.get_height() - 110))
 
-    # Mensaje de energía
-    if jugador.bloqueado:
-        font_msg = pygame.font.SysFont(None, 36)
-        aviso = font_msg.render(
-            "¡Sin energía! Descansando...", True, (255, 0, 0))
-        screen.blit(aviso, (10, screen.get_height() - 110))
+        # --- Controles ---
+        font_controles = pygame.font.SysFont(None, 20)
+        controles_texto = [
+            '"Q" cancelar  "U" deshacer  "I" inventario  "P" pausa',
+            '"Ctrl+S" guardar  "T" estadísticas  "I+O" orden por $'
+        ]
+        for i, texto in enumerate(controles_texto):
+            rendered = font_controles.render(texto, True, (0, 0, 0))
+            rect = rendered.get_rect()
+            rect.bottomright = (screen.get_width() -
+                                10, screen.get_height() - 30 + i * 20)
+            screen.blit(rendered, rect)
 
-    # --- Controles ---
-    font_controles = pygame.font.SysFont(None, 20)
-    controles_texto = [
-        '"Q" cancelar pedido  "U" deshacer  "I" inventario',
-        '"Ctrl+S" guardar  "T" estadísticas "I+O" orden por $'
-    ]
-    for i, texto in enumerate(controles_texto):
-        rendered = font_controles.render(texto, True, (0, 0, 0))
-        rect = rendered.get_rect()
-        rect.bottomright = (screen.get_width() -
-                            10, screen.get_height() - 30 + i * 20)
-        screen.blit(rendered, rect)
+        # Overlays opcionales
+        mostrar_inventario_detallado_ui()
 
-    # Overlays opcionales
-    mostrar_inventario_detallado_ui()
-
-    pygame.display.flip()
-    clock.tick(60)
+        pygame.display.flip()
+        clock.tick(60)
 
 pygame.quit()
