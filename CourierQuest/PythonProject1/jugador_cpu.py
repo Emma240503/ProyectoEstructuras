@@ -43,6 +43,9 @@ class JugadorCPU(Jugador):
         # Variables para nivel difícil (implementar después)
         self.ruta_planeada = []  # Lista de posiciones [x, y]
 
+        self.clima_mult_anterior = 1.0
+        self.ultimo_replan = 0
+
 
 
     def actualizar(self, mapa, pedidos_activos, clima_mult, consumo_clima_extra):
@@ -432,14 +435,13 @@ class JugadorCPU(Jugador):
         necesita_replanificar = (
                 not self.ruta_planeada or  # No hay ruta
                 len(self.ruta_planeada) == 0 or  # Ruta vacía
-                ahora - getattr(self, 'ultimo_replan', 0) > 10  # Cada 10 segundos
+                ahora - self.ultimo_replan > 10  # Cada 10 segundos
         )
 
+        cambio_clima = abs(clima_mult - self.clima_mult_anterior) > 0.1
+        if cambio_clima:
+            necesita_replanificar = True
 
-        if hasattr(self, 'clima_mult_anterior'):
-            cambio_clima = abs(clima_mult - self.clima_mult_anterior) > 0.1
-            if cambio_clima:
-                necesita_replanificar = True
 
 
         self.clima_mult_anterior = clima_mult
@@ -455,7 +457,7 @@ class JugadorCPU(Jugador):
         # Intentar entregar pedido
         entregado = self.entregar_pedido()
         if entregado:
-            print(f"CPU (A*) entregó pedido! Total: ${self.puntaje}")
+
             necesita_replanificar = True  # Replanificar después de entregar
 
         # Elegir mejor objetivo y planificar ruta
@@ -559,7 +561,7 @@ class JugadorCPU(Jugador):
 
         if mejor_pedido and mejor_ruta:
             self.ruta_planeada = mejor_ruta
-            print(f"CPU (A*) planificó ruta a pickup: {len(mejor_ruta)} pasos, valor: {mejor_valor:.2f}")
+
         else:
             self.ruta_planeada = []
 
@@ -580,13 +582,13 @@ class JugadorCPU(Jugador):
         frontera = []
         contador = 0
 
-        # g_score: costo desde inicio hasta nodo
+
         g_score = {inicio: 0}
 
         # f_score: g_score + heurística
         f_score = {inicio: self._heuristica(inicio, destino)}
 
-        # Para reconstruir el camino
+
         vino_de = {}
 
         # Agregar nodo inicial
@@ -596,27 +598,27 @@ class JugadorCPU(Jugador):
         # Nodos ya visitados
         visitados = set()
 
-        # Direcciones: arriba, abajo, izquierda, derecha
+        # Direcciones
         direcciones = [(0, -1), (0, 1), (-1, 0), (1, 0)]
 
         while frontera:
             _, _, actual = heappop(frontera)
 
-            # Si llegamos al destino, reconstruir camino
+
             if actual == destino:
                 return self._reconstruir_camino(vino_de, actual)
 
-            # Si ya visitamos este nodo, skip
+            #skip
             if actual in visitados:
                 continue
 
             visitados.add(actual)
 
-            # Explorar vecinos
+
             for dx, dy in direcciones:
                 vecino = (actual[0] + dx, actual[1] + dy)
 
-                # Verificar límites
+                # Verifica límites
                 if not (0 <= vecino[0] < len(mapa[0]) and 0 <= vecino[1] < len(mapa)):
                     continue
 
