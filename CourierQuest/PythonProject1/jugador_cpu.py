@@ -454,13 +454,271 @@ class JugadorCPU(Jugador):
     # ========================================
 
     def _ia_dificil(self, mapa, pedidos_activos, clima_mult, consumo_clima_extra):
-        """IA nivel difícil: Rutas óptimas con grafos.
+        ahora = time.time()
 
-        TODO: Implementar A* o Dijkstra
-        - Representar mapa como grafo
-        - Calcular rutas óptimas
-        - Optimizar secuencia de entregas
+        # Guardar posición actual en historial
+        self.historial_posiciones.append((self.x, self.y))
+        if len(self.historial_posiciones) > self.max_historial:
+            self.historial_posiciones.pop(0)
+
+        # Verificar si necesita replanificar ruta
+        necesita_replanificar = (
+                not self.ruta_planeada or  # No hay ruta
+                len(self.ruta_planeada) == 0 or  # Ruta vacía
+                ahora - getattr(self, 'ultimo_replan', 0) > 10  # Cada 10 segundos
+        )
+
+
+        if hasattr(self, 'clima_mult_anterior'):
+            cambio_clima = abs(clima_mult - self.clima_mult_anterior) > 0.1
+            if cambio_clima:
+                necesita_replanificar = True
+
+
+        self.clima_mult_anterior = clima_mult
+
+        # Intentar recoger pedido si estamos en un pickup
+        for pedido in list(pedidos_activos):
+            if [self.x, self.y] == pedido.pickup:
+                if self.recoger_pedido(pedido):
+                    pedidos_activos.remove(pedido)
+                    necesita_replanificar = True  # Replanifica despues de recoger
+
+
+        # Intentar entregar pedido
+        entregado = self.entregar_pedido()
+        if entregado:
+            print(f"CPU (A*) entregó pedido! Total: ${self.puntaje}")
+            necesita_replanificar = True  # Replanificar después de entregar
+
+        # Elegir mejor objetivo y planificar ruta
+        if necesita_replanificar:
+            self._planificar_estrategia_entregas(
+                mapa, pedidos_activos, clima_mult, consumo_clima_extra
+            )
+            self.ultimo_replan = ahora
+
+        # Ejecutar siguiente paso de la ruta
+        if self.ruta_planeada and len(self.ruta_planeada) > 0:
+            siguiente_pos = self.ruta_planeada[0]
+
+            # Calcular dirección hacia siguiente posición
+            dx = 0 if siguiente_pos[0] == self.x else (1 if siguiente_pos[0] > self.x else -1)
+            dy = 0 if siguiente_pos[1] == self.y else (1 if siguiente_pos[1] > self.y else -1)
+
+            # Intentar moverse
+            if self.mover(dx, dy, mapa, clima_mult, consumo_clima_extra):
+                # Si el movimiento fue exitoso y llegamos a la siguiente posición
+                if (self.x, self.y) == siguiente_pos:
+                    self.ruta_planeada.pop(0)
+            else:
+                # Si no puede moverse, replanificar
+                self.ruta_planeada = []
+        else:
+            # Sin ruta, moverse aleatorio
+            self._mover_aleatorio(mapa, clima_mult, consumo_clima_extra)
+
+    def _planificar_estrategia_entregas(self, mapa, pedidos_activos, clima_mult, consumo_clima_extra):
+
+        # Prioridad 1: Entregar pedidos en inventario
+        if self.inventario:
+            mejor_pedido = max(
+                self.inventario,
+                key=lambda p: (p.priority * 100 + p.payout)
+            )
+            destino = tuple(mejor_pedido.dropoff)
+
+            # Calcular ruta con A*
+            self.ruta_planeada = self._a_star(
+                mapa, (self.x, self.y), destino, clima_mult, consumo_clima_extra
+            )
+
+            if self.ruta_planeada:
+                print(f"CPU (A*) planificó ruta de entrega: {len(self.ruta_planeada)} pasos")
+            return
+
+        # Prioridad 2: Recoger el mejor pedido disponible
+        if not pedidos_activos:
+            self.ruta_planeada = []
+            return
+
+        # Evaluar todos los pedidos con función de valor completa
+        mejor_valor = float('-inf')
+        mejor_pedido = None
+        mejor_ruta = []
+
+        for pedido in pedidos_activos:
+            # Verificar capacidad
+            if self.peso_total() + pedido.weight > self.capacidad:
+                continue
+
+            destino = tuple(pedido.pickup)
+
+            # Calcular ruta con A*
+            ruta = self._a_star(
+                mapa, (self.x, self.y), destino, clima_mult, consumo_clima_extra
+            )
+
+            if not ruta:
+                continue
+
+            # Calcular valor del pedido
+            distancia = len(ruta)
+
+            # Función de valor: payout / (distancia + 1) * factores
+            valor = pedido.payout / (distancia + 1)
+
+            # Bonus por prioridad
+            if pedido.priority >= 1:
+                valor *= 1.5
+
+            # Penalización por clima malo
+            if clima_mult < 0.85:
+                valor *= 0.8
+
+            # Bonus por resistencia alta (puede tomar pedidos lejanos)
+            if self.resistencia > 70:
+                valor *= 1.1
+
+            # Penalización si resistencia baja (preferir pedidos cercanos)
+            if self.resistencia < 30:
+                if distancia > 10:
+                    valor *= 0.5
+
+            if valor > mejor_valor:
+                mejor_valor = valor
+                mejor_pedido = pedido
+                mejor_ruta = ruta
+
+        if mejor_pedido and mejor_ruta:
+            self.ruta_planeada = mejor_ruta
+            print(f"CPU (A*) planificó ruta a pickup: {len(mejor_ruta)} pasos, valor: {mejor_valor:.2f}")
+        else:
+            self.ruta_planeada = []
+
+    def _a_star(self, mapa, inicio, destino, clima_mult, consumo_clima_extra):
+        """Se investigo algoritmo A* y es mas facil para encontrar la mejor ruta.
+
+
         """
-        # Por ahora, usar IA fácil
-        print("IA Difícil aún no implementada, usando IA fácil")
-        self._ia_facil(mapa, pedidos_activos, clima_mult, consumo_clima_extra)
+        from heapq import heappush, heappop
+
+        # Verificar que destino sea válido
+        if destino[1] >= len(mapa) or destino[0] >= len(mapa[0]):
+            return []
+        if mapa[destino[1]][destino[0]] == "B":
+            return []
+
+        # Conjuntos y estructuras
+        frontera = []
+        contador = 0
+
+        # g_score: costo desde inicio hasta nodo
+        g_score = {inicio: 0}
+
+        # f_score: g_score + heurística
+        f_score = {inicio: self._heuristica(inicio, destino)}
+
+        # Para reconstruir el camino
+        vino_de = {}
+
+        # Agregar nodo inicial
+        heappush(frontera, (f_score[inicio], contador, inicio))
+        contador += 1
+
+        # Nodos ya visitados
+        visitados = set()
+
+        # Direcciones: arriba, abajo, izquierda, derecha
+        direcciones = [(0, -1), (0, 1), (-1, 0), (1, 0)]
+
+        while frontera:
+            _, _, actual = heappop(frontera)
+
+            # Si llegamos al destino, reconstruir camino
+            if actual == destino:
+                return self._reconstruir_camino(vino_de, actual)
+
+            # Si ya visitamos este nodo, skip
+            if actual in visitados:
+                continue
+
+            visitados.add(actual)
+
+            # Explorar vecinos
+            for dx, dy in direcciones:
+                vecino = (actual[0] + dx, actual[1] + dy)
+
+                # Verificar límites
+                if not (0 <= vecino[0] < len(mapa[0]) and 0 <= vecino[1] < len(mapa)):
+                    continue
+
+                # Verificar que no sea edificio
+                if mapa[vecino[1]][vecino[0]] == "B":
+                    continue
+
+                # Calcular costo del movimiento
+                costo_movimiento = self._calcular_costo_arista(
+                    mapa, actual, vecino, clima_mult, consumo_clima_extra
+                )
+
+                # Calcular g_score tentativo
+                tentativo_g = g_score[actual] + costo_movimiento
+
+                # Si encontramos un camino mejor a este vecino
+                if vecino not in g_score or tentativo_g < g_score[vecino]:
+                    vino_de[vecino] = actual
+                    g_score[vecino] = tentativo_g
+                    f_score[vecino] = tentativo_g + self._heuristica(vecino, destino)
+
+                    heappush(frontera, (f_score[vecino], contador, vecino))
+                    contador += 1
+
+        # No se encontró ruta
+        return []
+
+    def _calcular_costo_arista(self, mapa, desde, hacia, clima_mult, consumo_clima_extra):
+
+        costo = 1.0
+
+        # Factor por tipo de superficie
+        tile_destino = mapa[hacia[1]][hacia[0]]
+        surface_weights = {
+            'C': 1.0,  # Calle
+            'P': 0.95,  # Parque (más rápido)
+            'B': 999.0  # Edificio (bloqueado)
+        }
+        surface_weight = surface_weights.get(tile_destino, 1.0)
+
+        # Ajustar costo por superficie (invertir: menor peso = menor costo)
+        costo /= surface_weight
+
+        # Ajustar por clima (peor clima = mayor costo)
+        costo *= (2.0 - clima_mult)  # clima_mult=1.0 → costo*1.0, clima_mult=0.75 → costo*1.25
+
+        # Ajustar por consumo extra de resistencia
+        costo *= (1.0 + consumo_clima_extra)
+
+        # Penalización si resistencia baja (evitar rutas largas)
+        if self.resistencia < 30:
+            costo *= 1.5
+        elif self.resistencia < 50:
+            costo *= 1.2
+
+        return costo
+
+    def _heuristica(self, pos_actual, pos_destino):
+
+        return abs(pos_actual[0] - pos_destino[0]) + abs(pos_actual[1] - pos_destino[1])
+
+    def _reconstruir_camino(self, vino_de, actual):
+
+        camino = []
+        while actual in vino_de:
+            camino.append(actual)
+            actual = vino_de[actual]
+
+        camino.reverse()
+        return camino
+
+
