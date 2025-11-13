@@ -16,14 +16,7 @@ class JugadorCPU(Jugador):
     """Jugador controlado por IA con diferentes niveles de dificultad."""
 
     def __init__(self, x, y, dificultad='facil', capacidad=10):
-        """Construye el jugador CPU.
 
-        Args:
-            x (int): Posición inicial X
-            y (int): Posición inicial Y
-            dificultad (str): 'facil', 'media' o 'dificil'
-            capacidad (int): Capacidad máxima de carga
-        """
         super().__init__(x, y, capacidad)
         self.dificultad = dificultad
 
@@ -50,17 +43,10 @@ class JugadorCPU(Jugador):
         # Variables para nivel difícil (implementar después)
         self.ruta_planeada = []  # Lista de posiciones [x, y]
 
-        print(f"CPU creado en ({x}, {y}) con dificultad: {dificultad}")
+
 
     def actualizar(self, mapa, pedidos_activos, clima_mult, consumo_clima_extra):
-        """Actualiza el estado del CPU según su dificultad.
 
-        Args:
-            mapa: Matriz del mapa del juego
-            pedidos_activos: Lista de pedidos disponibles
-            clima_mult: Multiplicador de velocidad por clima
-            consumo_clima_extra: Consumo extra de resistencia por clima
-        """
         # Recuperar resistencia (heredado de Jugador)
         self.recuperar()
 
@@ -75,7 +61,7 @@ class JugadorCPU(Jugador):
 
         self.ultimo_movimiento = ahora
 
-        # Ejecutar IA según dificultad
+
         if self.dificultad == 'facil':
             self._ia_facil(mapa, pedidos_activos, clima_mult, consumo_clima_extra)
         elif self.dificultad == 'media':
@@ -88,14 +74,7 @@ class JugadorCPU(Jugador):
     # ========================================
 
     def _ia_facil(self, mapa, pedidos_activos, clima_mult, consumo_clima_extra):
-        """IA nivel fácil: Movimiento hacia objetivos con aleatoriedad.
 
-        Características:
-        - Elige un pedido al azar como objetivo
-        - Se mueve hacia el objetivo con 70% probabilidad, aleatorio 30%
-        - Cambia de objetivo cada 3-6 segundos
-        - Detecta bucles y activa modo escape
-        """
         ahora = time.time()
 
         # Guardar posición actual en historial
@@ -136,12 +115,12 @@ class JugadorCPU(Jugador):
                     # Si recogimos nuestro objetivo, cambiar a entrega
                     if self.objetivo_actual == pedido.pickup:
                         self.objetivo_actual = pedido.dropoff
-                    print(f"CPU recogió pedido!")
+
 
         # Intentar entregar pedido
         entregado = self.entregar_pedido()
         if entregado:
-            print(f"CPU entregó pedido! ${self.puntaje}")
+
             # Cambiar objetivo después de entregar
             self.objetivo_actual = None
             self.historial_posiciones.clear()  # Limpiar historial
@@ -180,13 +159,7 @@ class JugadorCPU(Jugador):
             self.objetivo_actual = None
 
     def _mover_hacia_objetivo(self, mapa, clima_mult, consumo_clima_extra):
-        """Mueve al CPU hacia su objetivo actual.
 
-        Args:
-            mapa: Matriz del mapa
-            clima_mult: Multiplicador de velocidad por clima
-            consumo_clima_extra: Consumo extra de resistencia
-        """
         if not self.objetivo_actual:
             return
 
@@ -246,13 +219,7 @@ class JugadorCPU(Jugador):
         self._mover_aleatorio(mapa, clima_mult, consumo_clima_extra)
 
     def _mover_aleatorio(self, mapa, clima_mult, consumo_clima_extra):
-        """Mueve al CPU en una dirección aleatoria válida.
 
-        Args:
-            mapa: Matriz del mapa
-            clima_mult: Multiplicador de velocidad por clima
-            consumo_clima_extra: Consumo extra de resistencia
-        """
         # Direcciones posibles: arriba, abajo, izquierda, derecha
         direcciones = [
             (0, -1),  # Arriba
@@ -295,7 +262,7 @@ class JugadorCPU(Jugador):
             self.mover(dx, dy, mapa, clima_mult, consumo_clima_extra)
 
     # ========================================
-    # NIVEL MEDIO - GREEDY/EXPECTIMAX (TODO)
+    # NIVEL MEDIO - GREEDY/EXPECTIMAX
     # ========================================
 
     def _ia_media(self, mapa, pedidos_activos, clima_mult, consumo_clima_extra):
@@ -450,7 +417,7 @@ class JugadorCPU(Jugador):
         self.objetivo_actual = mejor_pedido.pickup
 
     # ========================================
-    # NIVEL DIFÍCIL - A*/DIJKSTRA (TODO)
+    # NIVEL DIFÍCIL - A*/DIJKSTRA
     # ========================================
 
     def _ia_dificil(self, mapa, pedidos_activos, clima_mult, consumo_clima_extra):
