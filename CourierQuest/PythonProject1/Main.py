@@ -52,6 +52,7 @@ except:
     # Si no existe la imagen, usar la del jugador con tinte rojo
     cpu_image = player_image.copy()
     cpu_image.fill((255, 100, 100, 128), special_flags=pygame.BLEND_RGBA_MULT)
+    cpu_imagen_flip = pygame.transform.flip(cpu_image, True, False)
 
 # --- Cargar imágenes de pedidos y puntos de entrega ---
 pickup_image = pygame.image.load("assets/pedido_pickup.png").convert_alpha()
@@ -150,6 +151,10 @@ def reiniciar_juego():
     if dificultad_ia and dificultad_ia != 'sin_ia':
         jugador_cpu = JugadorCPU(map_width - 1, map_height - 1, dificultad_ia, capacidad=10)
         print(f"CPU creado con dificultad: {dificultad_ia}")
+        # Inicializar variables de dirección
+        global direccion_cpu, pos_x_anterior_cpu
+        direccion_cpu = 1
+        pos_x_anterior_cpu = jugador_cpu.x
     else:
         jugador_cpu = None
 
@@ -809,10 +814,24 @@ while running:
             cpu_cam_x = jugador_cpu.x - cam_x
             cpu_cam_y = jugador_cpu.y - cam_y
 
-            # Solo dibujar si está visible en la cámara
-            if (0 <= cpu_cam_x < view_width and 0 <= cpu_cam_y < view_height):
-                screen.blit(cpu_image, (cpu_cam_x * tile_size, cpu_cam_y * tile_size))
+            # Detectar movimiento del CPU
+            if jugador_cpu.x < pos_x_anterior_cpu:
+                direccion_cpu = -1  # Izquierda
+            elif jugador_cpu.x > pos_x_anterior_cpu:
+                direccion_cpu = 1  # Derecha
 
+            # Elegir imagen según dirección
+            if direccion_cpu == -1:
+                imagen_actual_cpu = cpu_imagen_flip
+            else:
+                imagen_actual_cpu = cpu_image
+
+            # Solo dibujar si está visible
+            if (0 <= cpu_cam_x < view_width and 0 <= cpu_cam_y < view_height):
+                screen.blit(imagen_actual_cpu, (cpu_cam_x * tile_size, cpu_cam_y * tile_size))
+
+            # Actualizar posición anterior
+            pos_x_anterior_cpu = jugador_cpu.x
         # UI
         mostrar_hud_mejorado()
 
@@ -852,6 +871,39 @@ while running:
         screen.blit(font.render("Reputación", True,
                                 (0, 0, 0)), (x_barra, y_barra_rep - 20))
 
+        # Barras de CPU
+        if dificultad_ia and dificultad_ia != 'sin_ia':
+            y_barra_cpu = screen.get_height() - 180
+
+            porcentaje = max(0, jugador_cpu.resistencia / jugador_cpu.max_resistencia)
+            ancho_actual = int(ancho_barra * porcentaje)
+            color_barra = (111, 78, 55) \
+                if porcentaje > 0.3 else (255, 255, 0) \
+                if porcentaje > 0.1 else (255, 0, 0)
+
+            pygame.draw.rect(screen, (100, 100, 100),
+                             (x_barra, y_barra_cpu, ancho_barra, alto_barra))
+            pygame.draw.rect(screen, color_barra,
+                             (x_barra, y_barra_cpu, ancho_actual, alto_barra))
+            screen.blit(font.render(
+                "Resistencia-CPU", True, (0, 0, 0)),
+                (x_barra, y_barra_cpu - 20))
+
+            # Barra de reputación del CPU
+            y_barra_rep = screen.get_height() - 130
+            porcentaje_rep = max(0, jugador_cpu.reputacion / 100)
+            ancho_actual_rep = int(ancho_barra * porcentaje_rep)
+            color_barra_rep = (255, 165, 0) \
+                if jugador_cpu.reputacion <= 30 else (255, 255, 0) \
+                if jugador_cpu.reputacion <= 60 else (87, 35, 100)
+
+            pygame.draw.rect(screen, (100, 100, 100),
+                             (x_barra, y_barra_rep, ancho_barra, alto_barra))
+            pygame.draw.rect(screen, color_barra_rep,
+                             (x_barra, y_barra_rep, ancho_actual_rep, alto_barra))
+            screen.blit(font.render("Reputación-CPU", True,
+                                    (0, 0, 0)), (x_barra, y_barra_rep - 20))
+
         # Cronómetro
         tiempo_restante = max(0, int(duracion - tiempo_transcurrido))
         minutos = tiempo_restante // 60
@@ -867,14 +919,14 @@ while running:
             font_msg = pygame.font.SysFont(None, 28)
             aviso = font_msg.render(
                 jugador.mensaje, True, (0, 0, 0))
-            screen.blit(aviso, (10, screen.get_height() - 130))
+            screen.blit(aviso, (10, screen.get_height() - 230))
 
         # Mensaje de energía
         if jugador.bloqueado:
             font_msg = pygame.font.SysFont(None, 36)
             aviso = font_msg.render(
                 "¡Sin energía! Descansando...", True, (255, 0, 0))
-            screen.blit(aviso, (10, screen.get_height() - 110))
+            screen.blit(aviso, (10, screen.get_height() - 230))
 
         # --- Controles ---
         font_controles = pygame.font.SysFont(None, 20)
