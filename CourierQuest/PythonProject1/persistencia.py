@@ -10,7 +10,9 @@ para volver a un estado anterior.
 import pickle
 import json
 import os
+import shutil
 import time
+import pygame
 from datetime import datetime
 
 
@@ -30,7 +32,37 @@ class SistemaPersistencia:
         self.carpeta_saves = "saves"
         self.carpeta_data = "data"
         self.archivo_puntajes = "data/puntajes.json"
+        self.archivo_config = "data/configuracion.json"
+        self.archivo_estadisticas = "data/estadisticas.json"
         self.crear_carpetas()
+
+    def restaurar_backup(self, fecha_backup):
+        """Restaura un backup específico."""
+        carpeta_backup = f"backups/backup_{fecha_backup}"
+
+        if not os.path.exists(carpeta_backup):
+            return False
+
+        try:
+            # Hacer backup actual antes de restaurar
+            self.crear_backup()
+
+            # Restaurar saves
+            if os.path.exists(f"{carpeta_backup}/saves"):
+                shutil.rmtree(self.carpeta_saves)
+                shutil.copytree(f"{carpeta_backup}/saves", self.carpeta_saves)
+
+            # Restaurar datos
+            if os.path.exists(f"{carpeta_backup}/data"):
+                shutil.rmtree(self.carpeta_data)
+                shutil.copytree(f"{carpeta_backup}/data", self.carpeta_data)
+
+            print(f"Backup {fecha_backup} restaurado exitosamente")
+            return True
+
+        except Exception as e:
+            print(f"Error al restaurar backup: {e}")
+            return False
 
     def crear_carpetas(self):
         """Crea las carpetas si no existen."""
@@ -186,6 +218,180 @@ class SistemaPersistencia:
             }
         }
 
+    def guardar_juego_completo(self, estado_juego, nombre_descripcion="", slot=1):
+        """Guarda el juego con información adicional."""
+        archivo = f"{self.carpeta_saves}/slot{slot}.sav"
+
+        try:
+            datos_guardado = {
+                'timestamp': time.time(),
+                'fecha_guardado': datetime.now().isoformat(),
+                'version': '1.0',
+                'descripcion': nombre_descripcion,
+                'estado_juego': estado_juego,
+                'checksum': self._calcular_checksum(estado_juego)
+            }
+
+            with open(archivo, 'wb') as f:
+                pickle.dump(datos_guardado, f)
+
+            print(f"Juego guardado exitosamente en {archivo}")
+            return True
+
+        except Exception as e:
+            print(f"Error al guardar juego: {e}")
+            return False
+
+    def _calcular_checksum(self, data):
+        """Calcula un checksum simple para verificar integridad."""
+        import hashlib
+        data_str = str(data).encode('utf-8')
+        return hashlib.md5(data_str).hexdigest()[:8]
+
+    def verificar_guardado(self, slot=1):
+        """Verifica la integridad de un guardado."""
+        archivo = f"{self.carpeta_saves}/slot{slot}.sav"
+
+        if not os.path.exists(archivo):
+            return False
+
+        try:
+            with open(archivo, 'rb') as f:
+                datos = pickle.load(f)
+
+            # Verificar checksum
+            checksum_calculado = self._calcular_checksum(datos['estado_juego'])
+            return datos.get('checksum') == checksum_calculado
+
+        except Exception:
+            return False
+
+    def guardar_configuracion(self, config):
+        """Guarda la configuración del juego."""
+        try:
+            config['ultima_actualizacion'] = datetime.now().isoformat()
+
+            with open(self.archivo_config, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+            return True
+        except Exception as e:
+            print(f"Error al guardar configuración: {e}")
+            return False
+
+    def cargar_configuracion(self):
+        """Carga la configuración del juego."""
+        config_default = {
+            'volumen_musica': 0.7,
+            'volumen_efectos': 0.8,
+            'pantalla_completa': False,
+            'resolucion': [800, 600],
+            'controles': {
+                'arriba': pygame.K_UP,
+                'abajo': pygame.K_DOWN,
+                'izquierda': pygame.K_LEFT,
+                'derecha': pygame.K_RIGHT
+            }
+        }
+
+        if not os.path.exists(self.archivo_config):
+            self.guardar_configuracion(config_default)
+            return config_default
+
+        try:
+            with open(self.archivo_config, 'r', encoding='utf-8') as f:
+                config_cargada = json.load(f)
+
+            # Combinar con valores por defecto para nuevas configuraciones
+            config_default.update(config_cargada)
+            return config_default
+
+        except Exception as e:
+            print(f"Error al cargar configuración: {e}")
+            return config_default
+
+    def guardar_estadisticas_jugador(self, estadisticas):
+        """Guarda estadísticas detalladas del jugador."""
+        try:
+            # Cargar estadísticas existentes
+            if os.path.exists(self.archivo_estadisticas):
+                with open(self.archivo_estadisticas, 'r', encoding='utf-8') as f:
+                    todas_estadisticas = json.load(f)
+            else:
+                todas_estadisticas = []
+
+            # Agregar nuevas estadísticas
+            estadisticas['fecha'] = datetime.now().isoformat()
+            estadisticas['timestamp'] = time.time()
+            todas_estadisticas.append(estadisticas)
+
+            # Mantener solo las últimas 100 partidas
+            if len(todas_estadisticas) > 100:
+                todas_estadisticas = todas_estadisticas[-100:]
+
+            with open(self.archivo_estadisticas, 'w', encoding='utf-8') as f:
+                json.dump(todas_estadisticas, f, indent=2, ensure_ascii=False)
+
+            return True
+
+        except Exception as e:
+            print(f"Error al guardar estadísticas: {e}")
+            return False
+
+    def obtener_estadisticas_totales(self):
+        """Calcula estadísticas agregadas de todas las partidas."""
+        if not os.path.exists(self.archivo_estadisticas):
+            return {}
+
+        try:
+            with open(self.archivo_estadisticas, 'r', encoding='utf-8') as f:
+                partidas = json.load(f)
+
+            if not partidas:
+                return {}
+
+            totales = {
+                'total_partidas': len(partidas),
+                'partidas_ganadas': sum(1 for p in partidas if p.get('meta_alcanzada', False)),
+                'total_entregas': sum(p.get('entregas_completadas', 0) for p in partidas),
+                'promedio_puntaje': sum(p.get('puntaje', 0) for p in partidas) / len(partidas),
+                'mejor_puntaje': max(p.get('puntaje', 0) for p in partidas),
+                'total_dinero_ganado': sum(p.get('dinero_ganado', 0) for p in partidas),
+                'promedio_tiempo': sum(p.get('tiempo_total', 0) for p in partidas) / len(partidas)
+            }
+
+            return totales
+
+        except Exception as e:
+            print(f"Error al calcular estadísticas: {e}")
+            return {}
+
+    def crear_backup(self):
+        """Crea un backup de todos los datos del juego."""
+        import shutil
+        from datetime import datetime
+
+        fecha = datetime.now().strftime("%Y%m%d_%H%M%S")
+        carpeta_backup = f"backups/backup_{fecha}"
+
+        try:
+            os.makedirs(carpeta_backup, exist_ok=True)
+
+            # Copiar saves
+            if os.path.exists(self.carpeta_saves):
+                shutil.copytree(self.carpeta_saves, f"{carpeta_backup}/saves")
+
+            # Copiar datos
+            if os.path.exists(self.carpeta_data):
+                shutil.copytree(self.carpeta_data, f"{carpeta_backup}/data")
+
+            print(f"Backup creado en: {carpeta_backup}")
+            return True
+
+        except Exception as e:
+            print(f"Error al crear backup: {e}")
+            return False
+
+
 
 class HistorialMovimientos:
     """Maneja un registro de los movimientos del jugador."""
@@ -238,3 +444,8 @@ class HistorialMovimientos:
     def puede_deshacer(self):
         """Devuelve true si hay 2 estados guardados."""
         return len(self.historial) >= 2
+
+    def limpiar_historial(self):
+        """Limpia el historial de movimientos."""
+        self.historial.clear()
+        print("Historial de movimientos limpiado")

@@ -93,6 +93,9 @@ menu_pausa = MenuPausa(screen)
 estado_juego = MENU
 dificultad_ia = None
 jugador_cpu = None
+direccion_cpu = 1  # Dirección del sprite del CPU
+pos_x_anterior_cpu = 0  # Para detectar cambios de dirección
+ultimo_autoguardado = 0  # Control de auto-guardado (evita guardados múltiples)
 
 # --- Cargar mapa y pedidos iniciales ---
 tiles = cargar_mapa(api)
@@ -142,6 +145,7 @@ def reiniciar_juego():
     global ultimo_check, ultimo_liberado, ultimo_limpieza_vistos
     global cola_pedidos, pedidos_data, mostrar_inventario_detallado
     global mostrar_estadisticas, ordendar_inventario, direccion_der
+    global direccion_cpu, pos_x_anterior_cpu, ultimo_autoguardado  # NUEVO
 
     # Reiniciar jugador humano
     jugador = Jugador(0, 0)
@@ -151,12 +155,14 @@ def reiniciar_juego():
     if dificultad_ia and dificultad_ia != 'sin_ia':
         jugador_cpu = JugadorCPU(map_width - 1, map_height - 1, dificultad_ia, capacidad=10)
         print(f"CPU creado con dificultad: {dificultad_ia}")
-        # Inicializar variables de dirección
-        global direccion_cpu, pos_x_anterior_cpu
+        # Inicializar variables del CPU
         direccion_cpu = 1
         pos_x_anterior_cpu = jugador_cpu.x
     else:
         jugador_cpu = None
+        # SIEMPRE inicializar estas variables (evita errores)
+        direccion_cpu = 1
+        pos_x_anterior_cpu = 0
 
     # Reiniciar pedidos
     pedidos_data = api.obtener_pedidos()["data"]
@@ -170,6 +176,7 @@ def reiniciar_juego():
     ultimo_check = time.time()
     ultimo_liberado = 0
     ultimo_limpieza_vistos = time.time()
+    ultimo_autoguardado = 0  # NUEVO
 
     # Reiniciar estado
     juego_terminado = False
@@ -179,8 +186,162 @@ def reiniciar_juego():
     mostrar_estadisticas = False
     ordendar_inventario = False
 
-    print("Juego reiniciado")
+    # Limpiar historial
+    historial_movimientos.limpiar_historial()
 
+    print("Juego reiniciado completamente")
+
+
+def cargar_juego_guardado(slot=1):
+    """Carga un juego guardado y restaura el estado completo."""
+    global jugador, pedidos_activos, tiempo_inicio, dificultad_ia, jugador_cpu
+    global cola_pedidos, direccion_cpu, pos_x_anterior_cpu, pedidos_vistos  # NUEVO
+
+    estado_cargado = sistema_persistencia.cargar_juego(slot)
+    if not estado_cargado:
+        jugador.mensaje = "Error al cargar partida"
+        jugador.mensaje_tiempo = time.time()
+        return False
+
+    try:
+        # RESTAURAR JUGADOR HUMANO
+        datos_jugador = estado_cargado['jugador']
+        jugador.x = datos_jugador['x']
+        jugador.y = datos_jugador['y']
+        jugador.resistencia = datos_jugador['resistencia']
+        jugador.puntaje = datos_jugador['puntaje']
+        jugador.reputacion = datos_jugador['reputacion']
+        jugador.entregas_completadas = datos_jugador['entregas_completadas']
+
+        # Restaurar inventario
+        jugador.inventario.clear()
+        for pedido_data in datos_jugador['inventario']:
+            pedido = Pedido(
+                pedido_data['pickup'],
+                pedido_data['dropoff'],
+                pedido_data['weight'],
+                pedido_data['priority'],
+                pedido_data['payout']
+            )
+            if 'id' in pedido_data and pedido_data['id']:
+                pedido.id = pedido_data['id']
+            if 'tiempo_recogido' in pedido_data and pedido_data['tiempo_recogido']:
+                pedido.tiempo_recogido = pedido_data['tiempo_recogido']
+            jugador.inventario.append(pedido)
+
+        # RESTAURAR PEDIDOS ACTIVOS
+        pedidos_activos.clear()
+        pedidos_vistos.clear()  # NUEVO: limpiar pedidos vistos
+
+        for pedido_data in estado_cargado['pedidos_activos']:
+            pedido = Pedido(
+                pedido_data['pickup'],
+                pedido_data['dropoff'],
+                pedido_data['weight'],
+                pedido_data['priority'],
+                pedido_data['payout']
+            )
+            if 'id' in pedido_data and pedido_data['id']:
+                pedido.id = pedido_data['id']
+                pedidos_vistos.add(pedido.id)  # NUEVO: marcar como visto
+            pedidos_activos.append(pedido)
+
+        # RESTAURAR COLA DE PEDIDOS
+        if 'cola_pedidos' in estado_cargado:
+            cola_pedidos.cola.clear()
+            for pedido_data in estado_cargado['cola_pedidos']:
+                pedido = Pedido(
+                    pedido_data['pickup'],
+                    pedido_data['dropoff'],
+                    pedido_data['weight'],
+                    pedido_data['priority'],
+                    pedido_data['payout']
+                )
+                cola_pedidos.cola.append(pedido)
+            print(f"Cola de pedidos restaurada: {len(cola_pedidos.cola)} pedidos")
+
+        # RESTAURAR CLIMA
+        if 'clima' in estado_cargado:
+            sistema_clima.estado_actual = estado_cargado['clima']['estado_actual']
+            sistema_clima.intensidad_actual = estado_cargado['clima']['intensidad_actual']
+            print(f"Clima restaurado: {sistema_clima.estado_actual}")
+
+        # RESTAURAR TIEMPO
+        tiempo_transcurrido = estado_cargado['tiempo_juego']
+        tiempo_inicio = time.time() - tiempo_transcurrido
+
+        # RESTAURAR DIFICULTAD Y CPU
+        if 'dificultad_ia' in estado_cargado:
+            dificultad_ia = estado_cargado['dificultad_ia']
+
+        # Recrear jugador CPU si había uno
+        if dificultad_ia and dificultad_ia != 'sin_ia':
+            # Restaurar CPU si hay datos guardados
+            if 'jugador_cpu' in estado_cargado:
+                datos_cpu = estado_cargado['jugador_cpu']
+                jugador_cpu = JugadorCPU(
+                    datos_cpu['x'],
+                    datos_cpu['y'],
+                    dificultad_ia,
+                    capacidad=10
+                )
+                jugador_cpu.resistencia = datos_cpu['resistencia']
+                jugador_cpu.puntaje = datos_cpu['puntaje']
+                jugador_cpu.reputacion = datos_cpu['reputacion']
+                jugador_cpu.entregas_completadas = datos_cpu['entregas_completadas']
+
+                # Restaurar inventario del CPU
+                jugador_cpu.inventario.clear()
+                for pedido_data in datos_cpu['inventario']:
+                    pedido = Pedido(
+                        pedido_data['pickup'],
+                        pedido_data['dropoff'],
+                        pedido_data['weight'],
+                        pedido_data['priority'],
+                        pedido_data['payout']
+                    )
+                    if 'id' in pedido_data and pedido_data['id']:
+                        pedido.id = pedido_data['id']
+                        pedidos_vistos.add(pedido.id)  # NUEVO
+                    if 'tiempo_recogido' in pedido_data and pedido_data['tiempo_recogido']:
+                        pedido.tiempo_recogido = pedido_data['tiempo_recogido']
+                    jugador_cpu.inventario.append(pedido)
+
+                print(f"CPU restaurado completamente desde guardado")
+            else:
+                # Crear CPU nuevo si no había datos guardados
+                jugador_cpu = JugadorCPU(map_width - 1, map_height - 1, dificultad_ia, capacidad=10)
+                print(f"CPU recreado (guardado sin datos de CPU)")
+
+            # SIEMPRE inicializar variables de dirección del CPU
+            direccion_cpu = 1
+            pos_x_anterior_cpu = jugador_cpu.x
+        else:
+            jugador_cpu = None
+            # Inicializar variables incluso sin CPU
+            direccion_cpu = 1
+            pos_x_anterior_cpu = 0
+
+        # Limpiar historial de movimientos al cargar
+        historial_movimientos.limpiar_historial()
+
+        jugador.mensaje = "Partida cargada exitosamente!"
+        jugador.mensaje_tiempo = time.time()
+        print("=" * 50)
+        print("CARGA COMPLETA EXITOSA")
+        print(f"   Jugador: ${jugador.puntaje} | Rep: {jugador.reputacion}")
+        if jugador_cpu:
+            print(f"   CPU: ${jugador_cpu.puntaje} | Rep: {jugador_cpu.reputacion}")
+        print("=" * 50)
+        return True
+
+    except Exception as e:
+        print(f"Error crítico al restaurar partida: {e}")
+        import traceback
+        traceback.print_exc()
+        jugador.mensaje = "Error al cargar partida"
+        jugador.mensaje_tiempo = time.time()
+        return False
 
 def mostrar_pantalla_final(ganado, puntaje_info):
     """Muestra la pantalla final del juego."""
@@ -348,6 +509,45 @@ def mostrar_hud_mejorado():
             screen.blit(texto_render, (10, y))
             y += 25
 
+"""
+def inicializar_persistencia():
+    sistema_persistencia = SistemaPersistencia()
+
+    # Cargar configuración
+    config = sistema_persistencia.cargar_configuracion()
+
+    # Aplicar configuración
+    if config.get('pantalla_completa'):
+        pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+
+    return sistema_persistencia, config
+
+
+def guardar_estado_automatico(jugador, pedidos_activos, clima, tiempo_transcurrido):
+    estado_actual = {
+        'jugador': {
+            'x': jugador.x,
+            'y': jugador.y,
+            'resistencia': jugador.resistencia,
+            'puntaje': jugador.puntaje,
+            'reputacion': jugador.reputacion,
+            'inventario': list(jugador.inventario),
+            'entregas_completadas': jugador.entregas_completadas
+        },
+        'pedidos_activos': pedidos_activos,
+        'tiempo_transcurrido': tiempo_transcurrido,
+        'clima_actual': clima.obtener_info_clima(),
+        'timestamp': time.time()
+    }
+
+    # Guardar automáticamente cada 2 minutos
+    if int(tiempo_transcurrido) % 120 == 0:
+        sistema_persistencia.guardar_juego_completo(
+            estado_actual,
+            "Auto-guardado",
+            slot=0  # Slot especial para autoguardados
+        )
+"""
 
 def mostrar_inventario_detallado_ui():
     """Muestra el inventario del jugador."""
@@ -476,6 +676,99 @@ while running:
         sistema_clima.actualizar()
         jugador.recuperar()
 
+        # Guardar automáticamente cada 2 minutos (120 segundos)
+        if tiempo_transcurrido >= 10:  # Solo después de 10 segundos de juego
+            tiempo_desde_ultimo = tiempo_transcurrido - ultimo_autoguardado
+            if tiempo_desde_ultimo >= 120:  # Han pasado 2 minutos
+                ultimo_autoguardado = tiempo_transcurrido
+
+                print(f"Iniciando auto-guardado en segundo {int(tiempo_transcurrido)}...")
+
+                # Preparar datos del jugador
+                estado_actual = {
+                    'jugador': {
+                        'x': jugador.x,
+                        'y': jugador.y,
+                        'resistencia': jugador.resistencia,
+                        'puntaje': jugador.puntaje,
+                        'reputacion': jugador.reputacion,
+                        'entregas_completadas': jugador.entregas_completadas,
+                        'inventario': [
+                            {
+                                'pickup': pedido.pickup,
+                                'dropoff': pedido.dropoff,
+                                'weight': pedido.weight,
+                                'priority': pedido.priority,
+                                'payout': pedido.payout,
+                                'id': getattr(pedido, 'id', None),
+                                'tiempo_recogido': getattr(pedido, 'tiempo_recogido', None)
+                            }
+                            for pedido in jugador.inventario
+                        ]
+                    },
+                    'pedidos_activos': [
+                        {
+                            'pickup': pedido.pickup,
+                            'dropoff': pedido.dropoff,
+                            'weight': pedido.weight,
+                            'priority': pedido.priority,
+                            'payout': pedido.payout,
+                            'id': getattr(pedido, 'id', None)
+                        }
+                        for pedido in pedidos_activos
+                    ],
+                    'clima': {
+                        'estado_actual': sistema_clima.estado_actual,
+                        'intensidad_actual': sistema_clima.intensidad_actual
+                    },
+                    'tiempo_juego': tiempo_transcurrido,
+                    'timestamp': time.time(),
+                    'dificultad_ia': dificultad_ia,
+                    'meta_ingresos': meta_ingresos
+                }
+
+                # Guardar datos del CPU si existe
+                if jugador_cpu:
+                    estado_actual['jugador_cpu'] = {
+                        'x': jugador_cpu.x,
+                        'y': jugador_cpu.y,
+                        'resistencia': jugador_cpu.resistencia,
+                        'puntaje': jugador_cpu.puntaje,
+                        'reputacion': jugador_cpu.reputacion,
+                        'entregas_completadas': jugador_cpu.entregas_completadas,
+                        'inventario': [
+                            {
+                                'pickup': pedido.pickup,
+                                'dropoff': pedido.dropoff,
+                                'weight': pedido.weight,
+                                'priority': pedido.priority,
+                                'payout': pedido.payout,
+                                'id': getattr(pedido, 'id', None),
+                                'tiempo_recogido': getattr(pedido, 'tiempo_recogido', None)
+                            }
+                            for pedido in jugador_cpu.inventario
+                        ]
+                    }
+
+                # Guardar pedidos pendientes en la cola
+                if hasattr(cola_pedidos, 'cola'):
+                    estado_actual['cola_pedidos'] = [
+                        {
+                            'pickup': pedido.pickup,
+                            'dropoff': pedido.dropoff,
+                            'weight': pedido.weight,
+                            'priority': pedido.priority,
+                            'payout': pedido.payout
+                        }
+                        for pedido in cola_pedidos.cola
+                    ]
+
+                sistema_persistencia.guardar_juego_completo(
+                    estado_actual,
+                    f"Auto-guardado - {int(tiempo_transcurrido)}s",
+                    slot=0
+                )
+                print(f"Auto-guardado exitoso en segundo {int(tiempo_transcurrido)}")
         # Actualizar CPU si existe
         if jugador_cpu and not juego_terminado:
             clima_mult = sistema_clima.obtener_multiplicador_actual()
@@ -666,27 +959,112 @@ while running:
                     dy = -1
                 elif event.key == pygame.K_DOWN:
                     dy = 1
-
+                # Pausa
+                elif event.key == pygame.K_p:
+                    estado_juego = PAUSADO
                 # Acciones especiales
+                elif (event.key == pygame.K_l and
+                      pygame.key.get_pressed()[pygame.K_LCTRL]):
+                    # Ctrl+L Cargar partida
+                    if cargar_juego_guardado(slot=1):
+                        print("Partida cargada desde slot 1")
+
                 elif event.key == pygame.K_q:
                     jugador.cancelar_ultimo_pedido()
                 elif event.key == pygame.K_u:  # Deshacer
                     historial_movimientos.deshacer(jugador, pedidos_activos)
-                elif event.key == pygame.K_p:  # PAUSAR
-                    estado_juego = PAUSADO
                 elif (event.key == pygame.K_s and
                       pygame.key.get_pressed()[pygame.K_LCTRL]):
-                    # Ctrl+S Guardar
+                    # Ctrl+S Guardar manualmente
+                    print("Guardando manualmente...")
+
                     estado_actual = {
-                        'jugador': jugador,
-                        'pedidos_activos': pedidos_activos,
-                        'cola_pedidos': cola_pedidos,
-                        'clima': sistema_clima,
-                        'tiempo_inicio': tiempo_inicio,
-                        'tiempo_transcurrido': tiempo_transcurrido,
-                        'mapa': tiles
+                        'jugador': {
+                            'x': jugador.x,
+                            'y': jugador.y,
+                            'resistencia': jugador.resistencia,
+                            'puntaje': jugador.puntaje,
+                            'reputacion': jugador.reputacion,
+                            'entregas_completadas': jugador.entregas_completadas,
+                            'inventario': [
+                                {
+                                    'pickup': pedido.pickup,
+                                    'dropoff': pedido.dropoff,
+                                    'weight': pedido.weight,
+                                    'priority': pedido.priority,
+                                    'payout': pedido.payout,
+                                    'id': getattr(pedido, 'id', None),
+                                    'tiempo_recogido': getattr(pedido, 'tiempo_recogido', None)
+                                }
+                                for pedido in jugador.inventario
+                            ]
+                        },
+                        'pedidos_activos': [
+                            {
+                                'pickup': pedido.pickup,
+                                'dropoff': pedido.dropoff,
+                                'weight': pedido.weight,
+                                'priority': pedido.priority,
+                                'payout': pedido.payout,
+                                'id': getattr(pedido, 'id', None)
+                            }
+                            for pedido in pedidos_activos
+                        ],
+                        'clima': {
+                            'estado_actual': sistema_clima.estado_actual,
+                            'intensidad_actual': sistema_clima.intensidad_actual
+                        },
+                        'tiempo_juego': tiempo_transcurrido,
+                        'timestamp': time.time(),
+                        'dificultad_ia': dificultad_ia,
+                        'meta_ingresos': meta_ingresos
                     }
-                    sistema_persistencia.guardar_juego(estado_actual)
+
+                    # Guardar CPU si existe
+                    if jugador_cpu:
+                        estado_actual['jugador_cpu'] = {
+                            'x': jugador_cpu.x,
+                            'y': jugador_cpu.y,
+                            'resistencia': jugador_cpu.resistencia,
+                            'puntaje': jugador_cpu.puntaje,
+                            'reputacion': jugador_cpu.reputacion,
+                            'entregas_completadas': jugador_cpu.entregas_completadas,
+                            'inventario': [
+                                {
+                                    'pickup': pedido.pickup,
+                                    'dropoff': pedido.dropoff,
+                                    'weight': pedido.weight,
+                                    'priority': pedido.priority,
+                                    'payout': pedido.payout,
+                                    'id': getattr(pedido, 'id', None),
+                                    'tiempo_recogido': getattr(pedido, 'tiempo_recogido', None)
+                                }
+                                for pedido in jugador_cpu.inventario
+                            ]
+                        }
+
+                    # Guardar cola
+                    if hasattr(cola_pedidos, 'cola'):
+                        estado_actual['cola_pedidos'] = [
+                            {
+                                'pickup': pedido.pickup,
+                                'dropoff': pedido.dropoff,
+                                'weight': pedido.weight,
+                                'priority': pedido.priority,
+                                'payout': pedido.payout
+                            }
+                            for pedido in cola_pedidos.cola
+                        ]
+
+                    if sistema_persistencia.guardar_juego_completo(estado_actual, "Guardado manual", slot=1):
+                        jugador.mensaje = "Juego guardado exitosamente!"
+                        jugador.mensaje_tiempo = time.time()
+                        print("Guardado manual exitoso en slot 1")
+                    else:
+                        jugador.mensaje = "Error al guardar"
+                        jugador.mensaje_tiempo = time.time()
+                        print("Error en guardado manual")
+
                 elif event.key == pygame.K_i:
                     # Mostrar/ocultar inventario detallado
                     mostrar_inventario_detallado = not mostrar_inventario_detallado
@@ -932,7 +1310,7 @@ while running:
         font_controles = pygame.font.SysFont(None, 20)
         controles_texto = [
             '"Q" cancelar  "U" deshacer  "I" inventario  "P" pausa',
-            '"Ctrl+S" guardar  "T" estadísticas  "I+O" orden por $'
+            '"Ctrl+S" guardar  "Ctrl+L" cargar  "T" estadísticas  "O" orden $'
         ]
         for i, texto in enumerate(controles_texto):
             rendered = font_controles.render(texto, True, (0, 0, 0))
