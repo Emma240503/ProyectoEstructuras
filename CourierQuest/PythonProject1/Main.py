@@ -154,7 +154,7 @@ def reiniciar_juego():
     # Crear jugador CPU según dificultad
     if dificultad_ia and dificultad_ia != 'sin_ia':
         jugador_cpu = JugadorCPU(map_width - 1, map_height - 1, dificultad_ia, capacidad=10)
-        print(f"CPU creado con dificultad: {dificultad_ia}")
+
         # Inicializar variables del CPU
         direccion_cpu = 1
         pos_x_anterior_cpu = jugador_cpu.x
@@ -189,7 +189,7 @@ def reiniciar_juego():
     # Limpiar historial
     historial_movimientos.limpiar_historial()
 
-    print("Juego reiniciado completamente")
+
 
 
 def cargar_juego_guardado(slot=1):
@@ -204,7 +204,7 @@ def cargar_juego_guardado(slot=1):
         return False
 
     try:
-        # RESTAURAR JUGADOR HUMANO
+        #cargar datos del jugador
         datos_jugador = estado_cargado['jugador']
         jugador.x = datos_jugador['x']
         jugador.y = datos_jugador['y']
@@ -213,7 +213,7 @@ def cargar_juego_guardado(slot=1):
         jugador.reputacion = datos_jugador['reputacion']
         jugador.entregas_completadas = datos_jugador['entregas_completadas']
 
-        # Restaurar inventario
+        # cargar inventario
         jugador.inventario.clear()
         for pedido_data in datos_jugador['inventario']:
             pedido = Pedido(
@@ -229,9 +229,9 @@ def cargar_juego_guardado(slot=1):
                 pedido.tiempo_recogido = pedido_data['tiempo_recogido']
             jugador.inventario.append(pedido)
 
-        # RESTAURAR PEDIDOS ACTIVOS
+        # cargar pedidos
         pedidos_activos.clear()
-        pedidos_vistos.clear()  # NUEVO: limpiar pedidos vistos
+        pedidos_vistos.clear()
 
         for pedido_data in estado_cargado['pedidos_activos']:
             pedido = Pedido(
@@ -246,7 +246,7 @@ def cargar_juego_guardado(slot=1):
                 pedidos_vistos.add(pedido.id)  # NUEVO: marcar como visto
             pedidos_activos.append(pedido)
 
-        # RESTAURAR COLA DE PEDIDOS
+        # cargar cola
         if 'cola_pedidos' in estado_cargado:
             cola_pedidos.cola.clear()
             for pedido_data in estado_cargado['cola_pedidos']:
@@ -258,23 +258,23 @@ def cargar_juego_guardado(slot=1):
                     pedido_data['payout']
                 )
                 cola_pedidos.cola.append(pedido)
-            print(f"Cola de pedidos restaurada: {len(cola_pedidos.cola)} pedidos")
 
-        # RESTAURAR CLIMA
+
+        # cargar clima
         if 'clima' in estado_cargado:
             sistema_clima.estado_actual = estado_cargado['clima']['estado_actual']
             sistema_clima.intensidad_actual = estado_cargado['clima']['intensidad_actual']
-            print(f"Clima restaurado: {sistema_clima.estado_actual}")
 
-        # RESTAURAR TIEMPO
+
+
         tiempo_transcurrido = estado_cargado['tiempo_juego']
         tiempo_inicio = time.time() - tiempo_transcurrido
 
-        # RESTAURAR DIFICULTAD Y CPU
+        #cargar dificultad ia
         if 'dificultad_ia' in estado_cargado:
             dificultad_ia = estado_cargado['dificultad_ia']
 
-        # Recrear jugador CPU si había uno
+        # cargar modo solito
         if dificultad_ia and dificultad_ia != 'sin_ia':
             # Restaurar CPU si hay datos guardados
             if 'jugador_cpu' in estado_cargado:
@@ -307,13 +307,13 @@ def cargar_juego_guardado(slot=1):
                         pedido.tiempo_recogido = pedido_data['tiempo_recogido']
                     jugador_cpu.inventario.append(pedido)
 
-                print(f"CPU restaurado completamente desde guardado")
-            else:
-                # Crear CPU nuevo si no había datos guardados
-                jugador_cpu = JugadorCPU(map_width - 1, map_height - 1, dificultad_ia, capacidad=10)
-                print(f"CPU recreado (guardado sin datos de CPU)")
 
-            # SIEMPRE inicializar variables de dirección del CPU
+            else:
+
+                jugador_cpu = JugadorCPU(map_width - 1, map_height - 1, dificultad_ia, capacidad=10)
+
+
+
             direccion_cpu = 1
             pos_x_anterior_cpu = jugador_cpu.x
         else:
@@ -329,14 +329,13 @@ def cargar_juego_guardado(slot=1):
         jugador.mensaje_tiempo = time.time()
         print("=" * 50)
         print("CARGA COMPLETA EXITOSA")
-        print(f"   Jugador: ${jugador.puntaje} | Rep: {jugador.reputacion}")
+        print(f"   Jugador: {jugador.puntaje}  Rep: {jugador.reputacion}")
         if jugador_cpu:
-            print(f"   CPU: ${jugador_cpu.puntaje} | Rep: {jugador_cpu.reputacion}")
+            print(f"   CPU: {jugador_cpu.puntaje}  Rep: {jugador_cpu.reputacion}")
         print("=" * 50)
         return True
 
     except Exception as e:
-        print(f"Error crítico al restaurar partida: {e}")
         import traceback
         traceback.print_exc()
         jugador.mensaje = "Error al cargar partida"

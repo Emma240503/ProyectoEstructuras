@@ -64,7 +64,7 @@ class JugadorCPU(Jugador):
 
         self.ultimo_movimiento = ahora
 
-
+#seleccionar dificultad desde el menu
         if self.dificultad == 'facil':
             self._ia_facil(mapa, pedidos_activos, clima_mult, consumo_clima_extra)
         elif self.dificultad == 'media':
@@ -73,7 +73,7 @@ class JugadorCPU(Jugador):
             self._ia_dificil(mapa, pedidos_activos, clima_mult, consumo_clima_extra)
 
     # ========================================
-    # NIVEL FÁCIL - MOVIMIENTO ALEATORIO
+    # NIVEL FÁCIL
     # ========================================
 
     def _ia_facil(self, mapa, pedidos_activos, clima_mult, consumo_clima_extra):
@@ -98,7 +98,7 @@ class JugadorCPU(Jugador):
                 self.tiempo_escape = ahora
                 self.objetivo_actual = None  # Cambiar de objetivo
 
-        # Desactivar modo escape después del tiempo
+        # Desactivar modo escape
         if self.modo_escape and (ahora - self.tiempo_escape > self.duracion_escape):
             self.modo_escape = False
             self.historial_posiciones.clear()  # Limpiar historial
@@ -130,7 +130,7 @@ class JugadorCPU(Jugador):
 
         # Decidir movimiento según modo
         if self.modo_escape:
-            # En modo escape: 100% aleatorio para salir del bucle
+
             self._mover_aleatorio(mapa, clima_mult, consumo_clima_extra)
         elif self.objetivo_actual:
             # Modo normal: 70% hacia objetivo, 30% aleatorio
@@ -312,12 +312,12 @@ class JugadorCPU(Jugador):
                     pedidos_activos.remove(pedido)
                     if self.objetivo_actual == pedido.pickup:
                         self.objetivo_actual = pedido.dropoff
-                    print(f"CPU (Expectimax) recogió pedido!")
+
 
         # Entregar pedido si estamos en dropoff
         entregado = self.entregar_pedido()
         if entregado:
-            print(f"CPU (Expectimax) entregó pedido! ${self.puntaje}")
+
             self.objetivo_actual = None
             self.historial_posiciones.clear()
 
@@ -420,7 +420,7 @@ class JugadorCPU(Jugador):
         self.objetivo_actual = mejor_pedido.pickup
 
     # ========================================
-    # NIVEL DIFÍCIL - A*/DIJKSTRA
+    # NIVEL DIFÍCIL - A*
     # ========================================
 
     def _ia_dificil(self, mapa, pedidos_activos, clima_mult, consumo_clima_extra):
@@ -503,7 +503,7 @@ class JugadorCPU(Jugador):
             )
 
             if self.ruta_planeada:
-                print(f"CPU (A*) planificó ruta de entrega: {len(self.ruta_planeada)} pasos")
+                print(f"CPU va en camino a recoge un pedido pipi: {len(self.ruta_planeada)} pasos")
             return
 
         # Prioridad 2: Recoger el mejor pedido disponible
