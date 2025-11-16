@@ -7,6 +7,7 @@ de la API, y dibujarlo en la pantalla.
 
 import pygame
 
+
 def cargar_mapa(api):
     """Carga el mapa desde la API y devuelve la matriz de tiles.
 
@@ -20,6 +21,7 @@ def cargar_mapa(api):
     """
     ciudad_data = api.obtener_mapa()["data"]
     return ciudad_data["tiles"]
+
 
 def dibujar_mapa(screen, tiles, colors, cam_x,
                  cam_y, tile_size, view_width,

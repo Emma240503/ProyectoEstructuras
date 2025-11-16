@@ -145,13 +145,15 @@ ordendar_inventario = False
 
 def reiniciar_juego():
     """Reinicia todas las variables del juego para una nueva partida.
+
     Esta función restablece:
       - El jugador humano y el jugador CPU (si existe).
       - La lista de pedidos, su cola y sus posiciones en el mapa.
       - Los tiempos globales del juego.
       - Variables de estado como inventario, estadísticas y banderas visuales.
       - Historial de movimientos y sistema de clima.
-      - Variables necesarias para la IA (dirección, posición previa, autoguardado).
+      - Variables necesarias para la IA
+      (dirección, posición previa, autoguardado).
 
     Otros:
         Modifica múltiples variables globales como:
@@ -385,7 +387,9 @@ def cargar_juego_guardado(slot=1):
         return False
 
 def mostrar_pantalla_final(ganado, puntaje_info):
-    """Renderiza la pantalla final del juego, incluyendo resultados y estadísticas.
+    """Renderiza la pantalla final del juego.
+
+     Incluyen resultados y estadísticas.
 
     Args:
         ganado (bool): Indica si el jugador ganó (True) o perdió (False).
@@ -399,7 +403,8 @@ def mostrar_pantalla_final(ganado, puntaje_info):
         None: La función solo dibuja en pantalla.
 
     Notes:
-        - Muestra textos centrados, estadísticas del jugador y del CPU (si existe).
+        - Muestra textos centrados, estadísticas del jugador
+         y del CPU (si existe).
         - Depende de `screen`, `pygame`, `jugador`, `jugador_cpu`
           y variables globales como `meta_ingresos`.
     """
@@ -414,7 +419,8 @@ def mostrar_pantalla_final(ganado, puntaje_info):
         if jugador.puntaje >= meta_ingresos:
             if jugador_cpu and jugador_cpu.puntaje >= meta_ingresos:
                 subtitulo = font_texto.render(
-                    f"¡Ambos alcanzaron la meta! Ganaste por ${jugador.puntaje - jugador_cpu.puntaje}",
+                    f"¡Ambos alcanzaron la meta! Ganaste por"
+                    f" ${jugador.puntaje - jugador_cpu.puntaje}",
                     True, (255, 255, 255))
             else:
                 subtitulo = font_texto.render(
@@ -424,7 +430,8 @@ def mostrar_pantalla_final(ganado, puntaje_info):
             # Victoria por tiempo
             if jugador_cpu:
                 subtitulo = font_texto.render(
-                    f"¡Ganaste por puntos! Tu: ${jugador.puntaje} vs CPU: ${jugador_cpu.puntaje}",
+                    f"¡Ganaste por puntos! Tu: "
+                    f"${jugador.puntaje} vs CPU: ${jugador_cpu.puntaje}",
                     True, (255, 255, 255))
             else:
                 subtitulo = font_texto.render(
@@ -439,11 +446,13 @@ def mostrar_pantalla_final(ganado, puntaje_info):
                 (255, 255, 255))
         elif jugador_cpu and jugador_cpu.puntaje >= meta_ingresos:
             subtitulo = font_texto.render(
-                f"¡El CPU ganó! CPU: ${jugador_cpu.puntaje} vs Tu: ${jugador.puntaje}",
+                f"¡El CPU ganó! CPU: "
+                f"${jugador_cpu.puntaje} vs Tu: ${jugador.puntaje}",
                 True, (255, 255, 255))
         elif jugador_cpu and jugador_cpu.puntaje > jugador.puntaje:
             subtitulo = font_texto.render(
-                f"El CPU ganó por puntos: ${jugador_cpu.puntaje} vs ${jugador.puntaje}",
+                f"El CPU ganó por puntos: "
+                f"${jugador_cpu.puntaje} vs ${jugador.puntaje}",
                 True, (255, 255, 255))
         else:
             subtitulo = font_texto.render(
@@ -501,7 +510,9 @@ def mostrar_pantalla_final(ganado, puntaje_info):
 
 
 def mostrar_hud_mejorado():
-    """Dibuja en pantalla el HUD mejorado con información del jugador y el juego.
+    """Dibuja en pantalla el HUD mejorado.
+
+    Contiene información del jugador y el juego.
 
     Muestra:
       - Información del clima (estado e intensidad).
@@ -564,8 +575,11 @@ def mostrar_hud_mejorado():
 
     # --- Info del CPU ---
     if jugador_cpu:
-        cpu_info = f"CPU: ${jugador_cpu.puntaje} | Rep: {jugador_cpu.reputacion} | Entregas: {jugador_cpu.entregas_completadas}"
-        screen.blit(font_small.render(cpu_info, True, (255, 150, 50)), (10, 195))
+        cpu_info = (f"CPU: ${jugador_cpu.puntaje} | "
+                    f"Rep: {jugador_cpu.reputacion} | "
+                    f"Entregas: {jugador_cpu.entregas_completadas}")
+        screen.blit(font_small.render(cpu_info, True,
+                                      (255, 150, 50)), (10, 195))
 
     # --- Mostrar estadísticas ---
     if mostrar_estadisticas:
@@ -676,11 +690,16 @@ def mostrar_inventario_detallado_ui():
         inventario_ordenado = jugador.obtener_inventario_por_plata()
         y_offset = 140
 
-        for i, pedido in enumerate(inventario_ordenado[:8]):  # Mostrar máximo 8
-            color = (255, 100, 100) if pedido.priority >= 1 else (255, 255, 255)
+        for i, pedido in enumerate(inventario_ordenado[:8]):
+            # Mostrar máximo 8
+            color = (255, 100, 100) if\
+                pedido.priority >= 1 else (255, 255, 255)
 
-            texto = f"{i + 1}. Peso:{pedido.weight} Pago:${pedido.payout} Prio:{pedido.priority}"
-            tiempo_transcurrido = time.time() - getattr(pedido, 'tiempo_recogido', time.time())
+            texto = (f"{i + 1}. Peso:{pedido.weight}"
+                     f" Pago:${pedido.payout} Prio:{pedido.priority}")
+            tiempo_transcurrido = (
+                    time.time() - getattr
+            (pedido, 'tiempo_recogido', time.time()))
             if tiempo_transcurrido > 20:
                 texto += " [TARDE]"
                 color = (255, 200, 100)
@@ -766,7 +785,8 @@ while running:
             if tiempo_desde_ultimo >= 120:  # Han pasado 2 minutos
                 ultimo_autoguardado = tiempo_transcurrido
 
-                print(f"Iniciando auto-guardado en segundo {int(tiempo_transcurrido)}...")
+                print(f"Iniciando auto-guardado en segundo"
+                      f" {int(tiempo_transcurrido)}...")
 
                 # Preparar datos del jugador
                 estado_actual = {
@@ -785,7 +805,8 @@ while running:
                                 'priority': pedido.priority,
                                 'payout': pedido.payout,
                                 'id': getattr(pedido, 'id', None),
-                                'tiempo_recogido': getattr(pedido, 'tiempo_recogido', None)
+                                'tiempo_recogido':
+                                    getattr(pedido, 'tiempo_recogido', None)
                             }
                             for pedido in jugador.inventario
                         ]
@@ -819,7 +840,8 @@ while running:
                         'resistencia': jugador_cpu.resistencia,
                         'puntaje': jugador_cpu.puntaje,
                         'reputacion': jugador_cpu.reputacion,
-                        'entregas_completadas': jugador_cpu.entregas_completadas,
+                        'entregas_completadas':
+                            jugador_cpu.entregas_completadas,
                         'inventario': [
                             {
                                 'pickup': pedido.pickup,
@@ -828,7 +850,8 @@ while running:
                                 'priority': pedido.priority,
                                 'payout': pedido.payout,
                                 'id': getattr(pedido, 'id', None),
-                                'tiempo_recogido': getattr(pedido, 'tiempo_recogido', None)
+                                'tiempo_recogido':
+                                    getattr(pedido, 'tiempo_recogido', None)
                             }
                             for pedido in jugador_cpu.inventario
                         ]
@@ -852,16 +875,21 @@ while running:
                     f"Auto-guardado - {int(tiempo_transcurrido)}s",
                     slot=0
                 )
-                print(f"Auto-guardado exitoso en segundo {int(tiempo_transcurrido)}")
+                print(f"Auto-guardado exitoso en segundo"
+                      f" {int(tiempo_transcurrido)}")
         # Actualizar CPU si existe
         if jugador_cpu and not juego_terminado:
             clima_mult = sistema_clima.obtener_multiplicador_actual()
-            consumo_clima_extra = sistema_clima.obtener_consumo_resistencia_extra()
-            jugador_cpu.actualizar(tiles, pedidos_activos, clima_mult, consumo_clima_extra)
+            consumo_clima_extra =\
+                sistema_clima.obtener_consumo_resistencia_extra()
+            jugador_cpu.actualizar(tiles, pedidos_activos,
+                                   clima_mult, consumo_clima_extra)
 
-        # Guardar estado para deshacer (cada 2 segundos para no saturar memoria)
+        # Guardar estado para deshacer
+        # (cada 2 segundos para no saturar memoria)
         if int(tiempo_transcurrido) % 2 == 0 and tiempo_transcurrido > 1:
-            historial_movimientos.guardar_estado(jugador, pedidos_activos, ahora)
+            historial_movimientos.guardar_estado(
+                jugador, pedidos_activos, ahora)
 
         # Condiciones de finalización del juego
         if not juego_terminado:
@@ -949,7 +977,8 @@ while running:
         if ahora - ultimo_check >= check_interval:
             try:
                 resp = api.obtener_pedidos()
-                nuevos_pedidos_data = resp.get("data", []) if isinstance(resp, dict) else resp
+                nuevos_pedidos_data = resp.get("data", []) if (
+                    isinstance(resp, dict)) else resp
             except Exception as e:
                 print("Error al obtener pedidos de la API:", e)
                 nuevos_pedidos_data = []
@@ -974,32 +1003,38 @@ while running:
                             ocupadas.add(tuple(ped.dropoff))
 
                     # Asignar posiciones aleatorias con separación
-                    pickup_pos = asignar_posicion_aleatoria(tiles, ocupadas, separacion=4)
+                    pickup_pos = (asignar_posicion_aleatoria
+                                  (tiles, ocupadas, separacion=4))
                     if pickup_pos:
                         p["pickup"] = pickup_pos
                         ocupadas.add(tuple(pickup_pos))
                     else:
                         # Si no hay espacio con sep=4, intentar con sep=2
-                        pickup_pos = asignar_posicion_aleatoria(tiles, ocupadas, separacion=2)
+                        pickup_pos =(asignar_posicion_aleatoria
+                                     (tiles, ocupadas, separacion=2))
                         if pickup_pos:
                             p["pickup"] = pickup_pos
                             ocupadas.add(tuple(pickup_pos))
                         else:
-                            print(f"No se pudo asignar pickup para pedido {pedido_id}")
+                            print(f"No se pudo asignar pickup para pedido "
+                                  f"{pedido_id}")
                             continue
 
-                    dropoff_pos = asignar_posicion_aleatoria(tiles, ocupadas, separacion=4)
+                    dropoff_pos = (asignar_posicion_aleatoria
+                                   (tiles, ocupadas, separacion=4))
                     if dropoff_pos:
                         p["dropoff"] = dropoff_pos
                         ocupadas.add(tuple(dropoff_pos))
                     else:
                         # Si no hay espacio con sep=4, intentar con sep=2
-                        dropoff_pos = asignar_posicion_aleatoria(tiles, ocupadas, separacion=2)
+                        dropoff_pos = (asignar_posicion_aleatoria
+                                       (tiles, ocupadas, separacion=2))
                         if dropoff_pos:
                             p["dropoff"] = dropoff_pos
                             ocupadas.add(tuple(dropoff_pos))
                         else:
-                            print(f"No se pudo asignar dropoff para pedido {pedido_id}")
+                            print(f"No se pudo asignar dropoff para pedido "
+                                  f"{pedido_id}")
                             continue
 
                     nuevo_pedido = Pedido(
@@ -1017,7 +1052,8 @@ while running:
             ultimo_check = ahora
 
         # --- Liberar pedidos ---
-        if len(pedidos_activos) < 5 and ahora - ultimo_liberado >= liberar_interval:
+        if (len(pedidos_activos) < 5 and ahora - ultimo_liberado
+                >= liberar_interval):
             pedido = cola_pedidos.obtener_siguiente()
             if pedido:
                 pedidos_activos.append(pedido)
@@ -1069,7 +1105,8 @@ while running:
                             'resistencia': jugador.resistencia,
                             'puntaje': jugador.puntaje,
                             'reputacion': jugador.reputacion,
-                            'entregas_completadas': jugador.entregas_completadas,
+                            'entregas_completadas':
+                                jugador.entregas_completadas,
                             'inventario': [
                                 {
                                     'pickup': pedido.pickup,
@@ -1078,7 +1115,8 @@ while running:
                                     'priority': pedido.priority,
                                     'payout': pedido.payout,
                                     'id': getattr(pedido, 'id', None),
-                                    'tiempo_recogido': getattr(pedido, 'tiempo_recogido', None)
+                                    'tiempo_recogido': getattr
+                                    (pedido, 'tiempo_recogido', None)
                                 }
                                 for pedido in jugador.inventario
                             ]
@@ -1112,7 +1150,8 @@ while running:
                             'resistencia': jugador_cpu.resistencia,
                             'puntaje': jugador_cpu.puntaje,
                             'reputacion': jugador_cpu.reputacion,
-                            'entregas_completadas': jugador_cpu.entregas_completadas,
+                            'entregas_completadas':
+                                jugador_cpu.entregas_completadas,
                             'inventario': [
                                 {
                                     'pickup': pedido.pickup,
@@ -1121,7 +1160,8 @@ while running:
                                     'priority': pedido.priority,
                                     'payout': pedido.payout,
                                     'id': getattr(pedido, 'id', None),
-                                    'tiempo_recogido': getattr(pedido, 'tiempo_recogido', None)
+                                    'tiempo_recogido': getattr(
+                                        pedido, 'tiempo_recogido', None)
                                 }
                                 for pedido in jugador_cpu.inventario
                             ]
@@ -1140,7 +1180,8 @@ while running:
                             for pedido in cola_pedidos.cola
                         ]
 
-                    if sistema_persistencia.guardar_juego_completo(estado_actual, "Guardado manual", slot=1):
+                    if (sistema_persistencia.guardar_juego_completo
+                        (estado_actual,"Guardado manual", slot=1)):
                         jugador.mensaje = "Juego guardado exitosamente!"
                         jugador.mensaje_tiempo = time.time()
                         print("Guardado manual exitoso en slot 1")
@@ -1171,7 +1212,8 @@ while running:
                 if jugador.recoger_pedido(pedido):
                     pedidos_activos.remove(pedido)
             # Jugador CPU
-            elif jugador_cpu and [jugador_cpu.x, jugador_cpu.y] == pedido.pickup:
+            elif (jugador_cpu and [jugador_cpu.x, jugador_cpu.y]
+                  == pedido.pickup):
                 if jugador_cpu.recoger_pedido(pedido):
                     pedidos_activos.remove(pedido)
 
@@ -1190,8 +1232,10 @@ while running:
 
         # --- Renderizado ---
         # Cámara
-        cam_x = max(0, min(jugador.x - view_width // 2, map_width - view_width))
-        cam_y = max(0, min(jugador.y - view_height // 2, map_height - view_height))
+        cam_x = max(0, min(jugador.x - view_width
+                           // 2, map_width - view_width))
+        cam_y = max(0, min(jugador.y - view_height
+                           // 2, map_height - view_height))
 
         # Dibujar mapa y objetos
         screen.fill((255, 255, 255))
@@ -1265,7 +1309,8 @@ while running:
         if direccion_der:
             screen.blit(
                 player_image, ((jugador.x - cam_x) *
-                               tile_size, (jugador.y - cam_y) * tile_size))
+                               tile_size, (jugador.y - cam_y)
+                               * tile_size))
         else:
             screen.blit(
                 player_imagen_flip, ((jugador.x - cam_x) *
@@ -1290,7 +1335,8 @@ while running:
 
             # Solo dibujar si está visible
             if (0 <= cpu_cam_x < view_width and 0 <= cpu_cam_y < view_height):
-                screen.blit(imagen_actual_cpu, (cpu_cam_x * tile_size, cpu_cam_y * tile_size))
+                screen.blit(imagen_actual_cpu,
+                            (cpu_cam_x * tile_size, cpu_cam_y * tile_size))
 
             # Actualizar posición anterior
             pos_x_anterior_cpu = jugador_cpu.x
@@ -1337,7 +1383,8 @@ while running:
         if dificultad_ia and dificultad_ia != 'sin_ia':
             y_barra_cpu = screen.get_height() - 180
 
-            porcentaje = max(0, jugador_cpu.resistencia / jugador_cpu.max_resistencia)
+            porcentaje = max(0, jugador_cpu.resistencia
+                             / jugador_cpu.max_resistencia)
             ancho_actual = int(ancho_barra * porcentaje)
             color_barra = (111, 78, 55) \
                 if porcentaje > 0.3 else (255, 255, 0) \
@@ -1346,7 +1393,8 @@ while running:
             pygame.draw.rect(screen, (100, 100, 100),
                              (x_barra, y_barra_cpu, ancho_barra, alto_barra))
             pygame.draw.rect(screen, color_barra,
-                             (x_barra, y_barra_cpu, ancho_actual, alto_barra))
+                             (x_barra, y_barra_cpu,
+                              ancho_actual, alto_barra))
             screen.blit(font.render(
                 "Resistencia-CPU", True, (0, 0, 0)),
                 (x_barra, y_barra_cpu - 20))

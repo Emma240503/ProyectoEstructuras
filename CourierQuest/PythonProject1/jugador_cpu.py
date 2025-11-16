@@ -465,7 +465,8 @@ class JugadorCPU(Jugador):
                 total += (self._expectimax_valor
                           (mapa, nx, ny, profundidad - 1, es_turno_cpu=True))
                 count += 1
-            return total / count if count > 0 else -self._distancia_objetivo(x, y)
+            return total / count if count > 0 else\
+                -self._distancia_objetivo(x, y)
 
     def _distancia_objetivo(self, x, y):
         """Calcula la distancia al objetivo actual.
@@ -510,7 +511,8 @@ class JugadorCPU(Jugador):
     # NIVEL DIFÍCIL - A*
     # ========================================
 
-    def _ia_dificil(self, mapa, pedidos_activos, clima_mult, consumo_clima_extra):
+    def _ia_dificil(self, mapa, pedidos_activos, clima_mult,
+                    consumo_clima_extra):
         """IA nivel dificil, usa rutas óptimas mediante A*.
 
         Args:
@@ -537,8 +539,6 @@ class JugadorCPU(Jugador):
         if cambio_clima:
             necesita_replanificar = True
 
-
-
         self.clima_mult_anterior = clima_mult
 
         # Intentar recoger pedido si estamos en un pickup
@@ -546,8 +546,8 @@ class JugadorCPU(Jugador):
             if [self.x, self.y] == pedido.pickup:
                 if self.recoger_pedido(pedido):
                     pedidos_activos.remove(pedido)
-                    necesita_replanificar = True  # Replanifica despues de recoger
-
+                    necesita_replanificar = True
+                    # Replanifica despues de recoger
 
         # Intentar entregar pedido
         entregado = self.entregar_pedido()
@@ -567,12 +567,15 @@ class JugadorCPU(Jugador):
             siguiente_pos = self.ruta_planeada[0]
 
             # Calcular dirección hacia siguiente posición
-            dx = 0 if siguiente_pos[0] == self.x else (1 if siguiente_pos[0] > self.x else -1)
-            dy = 0 if siguiente_pos[1] == self.y else (1 if siguiente_pos[1] > self.y else -1)
+            dx = 0 if siguiente_pos[0] == self.x else\
+                (1 if siguiente_pos[0] > self.x else -1)
+            dy = 0 if siguiente_pos[1] == self.y else\
+                (1 if siguiente_pos[1] > self.y else -1)
 
             # Intentar moverse
             if self.mover(dx, dy, mapa, clima_mult, consumo_clima_extra):
-                # Si el movimiento fue exitoso y llegamos a la siguiente posición
+                # Si el movimiento fue exitoso y
+                # llegamos a la siguiente posición
                 if (self.x, self.y) == siguiente_pos:
                     self.ruta_planeada.pop(0)
             else:
@@ -582,7 +585,8 @@ class JugadorCPU(Jugador):
             # Sin ruta, moverse aleatorio
             self._mover_aleatorio(mapa, clima_mult, consumo_clima_extra)
 
-    def _planificar_estrategia_entregas(self, mapa, pedidos_activos, clima_mult, consumo_clima_extra):
+    def _planificar_estrategia_entregas(self, mapa, pedidos_activos,
+                                        clima_mult, consumo_clima_extra):
         """Planifica la mejor estrategia para recoger/entregar pedidos.
 
         Args:
@@ -601,11 +605,13 @@ class JugadorCPU(Jugador):
 
             # Calcular ruta con A*
             self.ruta_planeada = self._a_star(
-                mapa, (self.x, self.y), destino, clima_mult, consumo_clima_extra
+                mapa, (self.x, self.y),
+                destino, clima_mult, consumo_clima_extra
             )
 
             if self.ruta_planeada:
-                print(f"CPU va en camino a recoge un pedido pipi: {len(self.ruta_planeada)} pasos")
+                print(f"CPU va en camino a recoge un pedido pipi:"
+                      f" {len(self.ruta_planeada)} pasos")
             return
 
         # Prioridad 2: Recoger el mejor pedido disponible
@@ -627,7 +633,8 @@ class JugadorCPU(Jugador):
 
             # Calcular ruta con A*
             ruta = self._a_star(
-                mapa, (self.x, self.y), destino, clima_mult, consumo_clima_extra
+                mapa, (self.x, self.y),
+                destino, clima_mult, consumo_clima_extra
             )
 
             if not ruta:
@@ -692,12 +699,10 @@ class JugadorCPU(Jugador):
         frontera = []
         contador = 0
 
-
         g_score = {inicio: 0}
 
         # f_score: g_score + heurística
         f_score = {inicio: self._heuristica(inicio, destino)}
-
 
         vino_de = {}
 
@@ -714,22 +719,21 @@ class JugadorCPU(Jugador):
         while frontera:
             _, _, actual = heappop(frontera)
 
-
             if actual == destino:
                 return self._reconstruir_camino(vino_de, actual)
 
-            #skip
+            # Skip
             if actual in visitados:
                 continue
 
             visitados.add(actual)
 
-
             for dx, dy in direcciones:
                 vecino = (actual[0] + dx, actual[1] + dy)
 
                 # Verifica límites
-                if not (0 <= vecino[0] < len(mapa[0]) and 0 <= vecino[1] < len(mapa)):
+                if not (0 <= vecino[0] < len(mapa[0]) and
+                        0 <= vecino[1] < len(mapa)):
                     continue
 
                 # Verificar que no sea edificio
@@ -748,7 +752,8 @@ class JugadorCPU(Jugador):
                 if vecino not in g_score or tentativo_g < g_score[vecino]:
                     vino_de[vecino] = actual
                     g_score[vecino] = tentativo_g
-                    f_score[vecino] = tentativo_g + self._heuristica(vecino, destino)
+                    f_score[vecino] = (tentativo_g +
+                                       self._heuristica(vecino, destino))
 
                     heappush(frontera, (f_score[vecino], contador, vecino))
                     contador += 1
@@ -756,7 +761,8 @@ class JugadorCPU(Jugador):
         # No se encontró ruta
         return []
 
-    def _calcular_costo_arista(self, mapa, desde, hacia, clima_mult, consumo_clima_extra):
+    def _calcular_costo_arista(self, mapa, desde, hacia, clima_mult,
+                               consumo_clima_extra):
         """Calcula el costo de mover de un nodo a otro.
 
                 Args:
@@ -784,7 +790,8 @@ class JugadorCPU(Jugador):
         costo /= surface_weight
 
         # Ajustar por clima (peor clima = mayor costo)
-        costo *= (2.0 - clima_mult)  # clima_mult=1.0 → costo*1.0, clima_mult=0.75 → costo*1.25
+        costo *= (2.0 - clima_mult)
+        # clima_mult=1.0 → costo*1.0, clima_mult=0.75 → costo*1.25
 
         # Ajustar por consumo extra de resistencia
         costo *= (1.0 + consumo_clima_extra)
@@ -807,7 +814,8 @@ class JugadorCPU(Jugador):
         Returns:
             int: Distancia heurística.
         """
-        return abs(pos_actual[0] - pos_destino[0]) + abs(pos_actual[1] - pos_destino[1])
+        return (abs(pos_actual[0] - pos_destino[0])
+                + abs(pos_actual[1] - pos_destino[1]))
 
     def _reconstruir_camino(self, vino_de, actual):
         """Reconstruye la ruta generada por A*.
