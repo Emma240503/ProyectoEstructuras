@@ -10,10 +10,33 @@ import heapq
 
 
 class Pedido:
-    """Clase para crear un objeto pedido."""
+    """Representa un pedido con información de recogida, entrega y prioridad.
+
+    Attributes:
+        pickup (list[int] | tuple[int, int]):
+            Coordenadas donde se recoge el pedido.
+        dropoff (list[int] | tuple[int, int]):
+            Coordenadas donde se entrega el pedido.
+        weight (int):
+            Peso del pedido. Útil para cálculos futuros.
+        priority (int):
+            Prioridad del pedido. Valores mayores representan
+            mayor urgencia.
+        payout (int):
+            Recompensa monetaria al completar el pedido.
+    """
 
     def __init__(self, pickup, dropoff, weight=1, priority=0, payout=100):
-        """Construye el objeto Pedido."""
+        """Inicializa un objeto Pedido.
+
+        Args:
+            pickup (list[int] | tuple[int, int]): Posición de recogida.
+            dropoff (list[int] | tuple[int, int]): Posición de entrega.
+            weight (int, optional): Peso del pedido. Por defecto 1.
+            priority (int, optional): Nivel de prioridad. Por defecto 0.
+            payout (int, optional): Pago por completar el pedido.
+                Por defecto 100.
+        """
         self.pickup = pickup
         self.dropoff = dropoff
         self.weight = weight
@@ -21,15 +44,44 @@ class Pedido:
         self.payout = payout
 
     def __lt__(self, other):
-        """Prioridad más alta primero."""
+        """Define el orden entre pedidos basado en prioridad.
+
+        Permite usar objetos Pedido dentro de un heap, donde los pedidos
+        con mayor prioridad deben salir primero.
+
+        Args:
+            other (Pedido): Otro pedido con el cual comparar.
+
+        Returns:
+            bool: ``True`` si este pedido tiene mayor prioridad que ``other``.
+        """
         return self.priority > other.priority
 
 
 class ColaPedidos:
-    """Clase para crear la cola de pedidos del jugador."""
+    """Cola de pedidos basada en un heap de prioridades.
+
+    Esta estructura permite obtener siempre el pedido de mayor prioridad.
+
+    Attributes:
+        cola (list[Pedido]):
+            Lista interna usada como heap para almacenar pedidos.
+    """
 
     def __init__(self, lista_pedidos):
-        """Construye la cola de pedidos hace uso de heapq."""
+        """Inicializa la cola y construye el heap a partir de una lista.
+
+        Args:
+            lista_pedidos (list[dict]):
+                Lista de diccionarios con datos de los pedidos.
+                Cada diccionario debe incluir al menos:
+                - "pickup"
+                - "dropoff"
+                Puede incluir opcionalmente:
+                - "weight"
+                - "priority"
+                - "payout"
+        """
         self.cola = []
         for p in lista_pedidos:
             pedido = Pedido(
@@ -42,11 +94,21 @@ class ColaPedidos:
             heapq.heappush(self.cola, pedido)
 
     def agregar_pedido(self, pedido):
-        """Agrega un pedido al heap."""
+        """Agrega un pedido a la cola de prioridades.
+
+        Args:
+            pedido (Pedido): El pedido a agregar.
+        """
         heapq.heappush(self.cola, pedido)
 
     def obtener_siguiente(self):
-        """Obtiene el siguiente elemento en orden de prioridad."""
+        """Extrae el pedido con mayor prioridad.
+
+        Returns:
+            Pedido | None:
+                El pedido de mayor prioridad del heap.
+                Retorna ``None`` si la cola está vacía.
+        """
         if self.cola:
             return heapq.heappop(self.cola)  # sale el de mayor prioridad
         return None

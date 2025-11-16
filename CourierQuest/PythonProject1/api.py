@@ -29,7 +29,15 @@ LOCAL_CLIMA = "data/clima.json"
 
 
 def obtener_mapa():
-    """Se obtiene el mapa mediante el URL de la API."""
+    """Obtiene el mapa desde la API o desde un archivo local.
+
+    Se intenta consultar la API definida por ``URL_MAPA``.
+    Si ocurre un error de conexión o la respuesta no es válida,
+    se carga el mapa desde el archivo local ``LOCAL_MAPA``.
+
+    Returns:
+        dict: Datos del mapa en formato JSON.
+    """
     try:
         resp = requests.get(URL_MAPA, timeout=5)
         if resp.status_code == 200:
@@ -41,7 +49,15 @@ def obtener_mapa():
 
 
 def obtener_pedidos():
-    """Se obtienen los pedidos mediante el URL de la API."""
+    """Obtiene la lista de pedidos desde la API o desde un archivo local.
+
+    Intenta realizar una solicitud HTTP hacia ``URL_PEDIDOS``.
+    If la solicitud falla o devuelve un código distinto de 200,
+    se cargan los pedidos desde ``LOCAL_PEDIDOS``.
+
+    Returns:
+        list: Lista de pedidos en formato JSON.
+    """
     try:
         resp = requests.get(URL_PEDIDOS, timeout=5)
         if resp.status_code == 200:
@@ -53,7 +69,15 @@ def obtener_pedidos():
 
 
 def obtener_clima():
-    """Se obtienen el clima mediante el URL de la API."""
+    """Obtiene la información del clima desde la API o desde un archivo local.
+
+    Realiza una solicitud hacia ``URL_CLIMA``.
+    Si ocurre un error (timeout, conexión, estado inválido),
+    la información se obtiene desde ``LOCAL_CLIMA``.
+
+    Returns:
+        dict: Datos del clima en formato JSON.
+    """
     try:
         resp = requests.get(URL_CLIMA, timeout=5)
         if resp.status_code == 200:

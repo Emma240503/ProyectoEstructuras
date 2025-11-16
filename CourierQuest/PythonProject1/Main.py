@@ -4,8 +4,9 @@ Main.py.
 Aquí se maneja el juego y su interfaz, se
 configura la pantalla, carga mapas y juegos,
 crea el jugador y sus acciones con teclas,
-cargan imagenes de los elementos del juego y
-maneja el bucle del juego para que funcione.
+cargan imagenes de los elementos del juego
+crea al cpu rival y maneja el bucle del
+juego para que funcione.
 """
 
 import pygame
@@ -45,14 +46,10 @@ direccion_der = True  # La direccion a la que apunta el repartidor.
 player_imagen_flip = pygame.transform.flip(player_image, True, False)
 
 # --- Cargar imagen del CPU ---
-try:
-    cpu_image = pygame.image.load("assets/repartidor_cpu.png").convert_alpha()
-    cpu_image = pygame.transform.scale(cpu_image, (tile_size, tile_size))
-except:
-    # Si no existe la imagen, usar la del jugador con tinte rojo
-    cpu_image = player_image.copy()
-    cpu_image.fill((255, 100, 100, 128), special_flags=pygame.BLEND_RGBA_MULT)
-    cpu_imagen_flip = pygame.transform.flip(cpu_image, True, False)
+# Utiliza la imagen del jugador con tinte rojo
+cpu_image = player_image.copy()
+cpu_image.fill((255, 100, 100, 128), special_flags=pygame.BLEND_RGBA_MULT)
+cpu_image_flip = pygame.transform.flip(cpu_image, True, False)
 
 # --- Cargar imágenes de pedidos y puntos de entrega ---
 pickup_image = pygame.image.load("assets/pedido_pickup.png").convert_alpha()
@@ -65,6 +62,14 @@ dropoff_prioridad_image = pygame.image.load(
     "assets/pedido_dropoff_prioridad.png").convert_alpha()
 dropoff_prioridad_image = pygame.transform.scale(
     dropoff_prioridad_image, (tile_size, tile_size))
+
+# --- Cargar imágenes de puntos de entrega del CPU ---
+dropoff_normal_image_cpu = dropoff_normal_image.copy()
+dropoff_normal_image_cpu.fill((255, 100, 100, 128),
+                              special_flags=pygame.BLEND_RGBA_MULT)
+dropoff_prioridad_image_cpu = dropoff_prioridad_image.copy()
+dropoff_prioridad_image_cpu.fill((255, 100, 100, 128),
+                                 special_flags=pygame.BLEND_RGBA_MULT)
 
 # --- Cargar imágenes del ambiente ---
 calle_image = pygame.image.load("assets/Calle.jpg").convert()
@@ -139,7 +144,21 @@ ordendar_inventario = False
 
 
 def reiniciar_juego():
-    """Reinicia todas las variables del juego para una nueva partida."""
+    """Reinicia todas las variables del juego para una nueva partida.
+    Esta función restablece:
+      - El jugador humano y el jugador CPU (si existe).
+      - La lista de pedidos, su cola y sus posiciones en el mapa.
+      - Los tiempos globales del juego.
+      - Variables de estado como inventario, estadísticas y banderas visuales.
+      - Historial de movimientos y sistema de clima.
+      - Variables necesarias para la IA (dirección, posición previa, autoguardado).
+
+    Otros:
+        Modifica múltiples variables globales como:
+        `jugador`, `jugador_cpu`, `pedidos_activos`, `pedidos_vistos`,
+        `tiempo_inicio`, `juego_terminado`, `juego_ganado`,
+        `cola_pedidos`, `direccion_cpu`, etc.
+    """
     global jugador, jugador_cpu, pedidos_activos, pedidos_vistos
     global tiempo_inicio, juego_terminado, juego_ganado, puntaje_calculado
     global ultimo_check, ultimo_liberado, ultimo_limpieza_vistos
@@ -153,7 +172,8 @@ def reiniciar_juego():
 
     # Crear jugador CPU según dificultad
     if dificultad_ia and dificultad_ia != 'sin_ia':
-        jugador_cpu = JugadorCPU(map_width - 1, map_height - 1, dificultad_ia, capacidad=10)
+        jugador_cpu = JugadorCPU(map_width - 1, map_height - 1,
+                                 dificultad_ia, capacidad=10)
 
         # Inicializar variables del CPU
         direccion_cpu = 1
@@ -189,11 +209,33 @@ def reiniciar_juego():
     # Limpiar historial
     historial_movimientos.limpiar_historial()
 
-
-
-
 def cargar_juego_guardado(slot=1):
-    """Carga un juego guardado y restaura el estado completo."""
+    """Carga un archivo de guardado y restaura el estado completo del juego.
+
+    Esta función:
+      - Lee el archivo de guardado mediante el sistema de persistencia.
+      - Reconstruye el estado del jugador, CPU (si existe), inventarios y pedidos.
+      - Restaura elementos del clima, tiempos y valores de la IA.
+      - Reposiciona todo de forma segura para continuar la partida.
+
+    Args:
+        slot (int, optional): Número de ranura de guardado a cargar.
+            El valor por defecto es 1.
+
+    Returns:
+        bool: True si la partida se cargó correctamente.
+              False si hubo un error o el archivo no existe.
+
+    Side Effects:
+        Modifica una gran cantidad de variables globales:
+        `jugador`, `jugador_cpu`, `pedidos_activos`, `pedidos_vistos`,
+        `cola_pedidos`, `tiempo_inicio`, `dificultad_ia`, entre otras.
+
+    Notes:
+        - Si ocurre un error durante la carga, el juego muestra un mensaje
+          y devuelve False sin detener la ejecución.
+        - Los pedidos cargados se reconstruyen como nuevas instancias `Pedido`.
+    """
     global jugador, pedidos_activos, tiempo_inicio, dificultad_ia, jugador_cpu
     global cola_pedidos, direccion_cpu, pos_x_anterior_cpu, pedidos_vistos  # NUEVO
 
@@ -343,7 +385,24 @@ def cargar_juego_guardado(slot=1):
         return False
 
 def mostrar_pantalla_final(ganado, puntaje_info):
-    """Muestra la pantalla final del juego."""
+    """Renderiza la pantalla final del juego, incluyendo resultados y estadísticas.
+
+    Args:
+        ganado (bool): Indica si el jugador ganó (True) o perdió (False).
+        puntaje_info (dict): Diccionario con el puntaje final y su desglose.
+            Debe contener:
+                - "puntaje_final" (int/float)
+                - "desglose" (dict con las claves:
+                    'base', 'bonus_tiempo', 'bonus_meta', 'penalizaciones')
+
+    Returns:
+        None: La función solo dibuja en pantalla.
+
+    Notes:
+        - Muestra textos centrados, estadísticas del jugador y del CPU (si existe).
+        - Depende de `screen`, `pygame`, `jugador`, `jugador_cpu`
+          y variables globales como `meta_ingresos`.
+    """
     screen.fill((0, 0, 0))
     font_titulo = pygame.font.SysFont(None, 48)
     font_texto = pygame.font.SysFont(None, 24)
@@ -442,7 +501,20 @@ def mostrar_pantalla_final(ganado, puntaje_info):
 
 
 def mostrar_hud_mejorado():
-    """Muestra la interfaz del juego."""
+    """Dibuja en pantalla el HUD mejorado con información del jugador y el juego.
+
+    Muestra:
+      - Información del clima (estado e intensidad).
+      - Progreso hacia la meta de ingresos.
+      - Inventario resumido.
+      - Estado del jugador (Resistencia, etc.).
+      - Estadísticas si la opción está activada.
+      - Información del CPU si existe.
+
+    Notes:
+        - Depende de `jugador`, `jugador_cpu`, `sistema_clima`,
+          así como banderas globales como `mostrar_estadisticas`.
+    """
     font = pygame.font.SysFont(None, 24)
     font_small = pygame.font.SysFont(None, 18)
 
@@ -549,7 +621,20 @@ def guardar_estado_automatico(jugador, pedidos_activos, clima, tiempo_transcurri
 """
 
 def mostrar_inventario_detallado_ui():
-    """Muestra el inventario del jugador."""
+    """Muestra una ventana flotante con los detalles completos del inventario.
+
+    La ventana es semitransparente e incluye:
+      - Los pedidos ordenados por prioridad o por monto (dependiendo del modo).
+      - Colores indicativos si el pedido está retrasado.
+      - Máximo 8 elementos visibles simultáneamente.
+
+    Notes:
+        - La función no hace nada si:
+            · El inventario está vacío, o
+            · `mostrar_inventario_detallado` es False.
+        - Depende del objeto global `jugador` y sus métodos
+          `obtener_inventario_ordenado()` y `obtener_inventario_por_plata()`.
+    """
     if not mostrar_inventario_detallado or not jugador.inventario:
         return
 
@@ -1167,9 +1252,9 @@ while running:
                 if (cam_x <= dx < cam_x + view_width and
                         cam_y <= dy < cam_y + view_height):
                     if pedido.priority >= 1:
-                        imagen_dropoff = dropoff_prioridad_image
+                        imagen_dropoff = dropoff_prioridad_image_cpu
                     else:
-                        imagen_dropoff = dropoff_normal_image
+                        imagen_dropoff = dropoff_normal_image_cpu
 
                     screen.blit(
                         imagen_dropoff, ((dx - cam_x) *
@@ -1199,7 +1284,7 @@ while running:
 
             # Elegir imagen según dirección
             if direccion_cpu == -1:
-                imagen_actual_cpu = cpu_imagen_flip
+                imagen_actual_cpu = cpu_image_flip
             else:
                 imagen_actual_cpu = cpu_image
 

@@ -12,19 +12,27 @@ import json
 
 
 class SistemaClima:
-    """Crea el sistema de clima.
+    """Sistema de clima dinámico.
+
+    Está basado en una cadena de Markov
+    y datos externos.
 
     Administra condiciones climáticas,
-    las toma desde la API y hace que
-    cambien automáticamente, también
-    aplica los efectos del clima al jugador.
+    las actualiza automáticamente según
+    probabilidades configuradas y aplica efectos
+    como multiplicadores de velocidad
+    e incremento de consumo de resistencia.
     """
 
     def __init__(self, api_module=None):
-        """Construye el sistema.
+        """Inicializa el sistema de clima.
 
-        Carga la configuración del clima de la API y
-        configura que siempre inicie con "clear".
+        Carga la configuración desde la API o archivo local y define el estado
+        inicial como "clear".
+
+        Args:
+            api_module: Módulo de API con un método `obtener_clima()`, o None
+                para usar archivo local.
         """
         self.api = api_module
 
@@ -74,7 +82,15 @@ class SistemaClima:
         self.cargar_configuracion_clima()
 
     def cargar_configuracion_clima(self):
-        """Carga la configuración del clima de la API o archivo local."""
+        """Carga la configuración del clima desde la API o archivo local.
+
+        Si la API falla o el formato es incorrecto, usa una configuración
+        predeterminada.
+
+        Raises:
+            Exception: Si ocurre un error al
+            leer archivo local o procesar datos.
+        """
         try:
             if self.api:
                 clima_data = self.api.obtener_clima()
@@ -118,11 +134,19 @@ class SistemaClima:
     def _procesar_matriz_transicion(self, transition_data):
         """Convierte la matriz de transición.
 
-         Lo hace del formato API al formato interno.
+         Del formato API al formato interno.
 
-        API format: {"clear": {"clear": 0.6, "clouds": 0.3, "rain": 0.1}, ...}.
-        Internal format: {"clear": ["clear", "clouds", "rain"],
-        weights: [0.6, 0.3, 0.1]}.
+        El formato de entrada esperado es:
+            {"clear": {"clouds": 0.3, "rain": 0.1, ...}, ...}
+
+        El formato interno es:
+            {"clear": {"estados": [...], "probabilidades": [...]}, ...}
+
+        Args:
+            transition_data (dict): Diccionario de transiciones desde la API.
+
+        Returns:
+            dict: Matriz de transición procesada y normalizada.
         """
         matriz_procesada = {}
 
@@ -150,7 +174,10 @@ class SistemaClima:
         return matriz_procesada
 
     def _usar_configuracion_por_defecto(self):
-        """Hace que se use un clima por defecto si el API falla."""
+        """Carga una configuración interna.
+
+        Opta por esta opción si la API falla.
+        """
         self.estados_disponibles =\
             ['clear', 'clouds', 'rain_light', 'rain', 'storm',
              'fog', 'wind', 'heat', 'cold']
@@ -181,9 +208,12 @@ class SistemaClima:
         print("Usando configuración de clima por defecto")
 
     def obtener_multiplicador_actual(self):
-        """Retorna el multiplicador de velocidad.
+        """Calcula el multiplicador de velocidad según el clima actual.
 
-        Retorna el actual (con transición suave).
+        Aplica interpolación lineal si hay una transición activa.
+
+        Returns:
+            float: Multiplicador de velocidad (entre ~0.75 y 1.00).
         """
         if not self.en_transicion:
             base_mult = self.multiplicadores.get(self.estado_actual, 1.0)
@@ -209,7 +239,13 @@ class SistemaClima:
         return multiplicador
 
     def obtener_consumo_resistencia_extra(self):
-        """Retorna el consumo extra de resistencia por el clima actual."""
+        """Calcula el consumo extra de resistencia debido al clima.
+
+        Si hay una transición activa, interpola entre ambos estados.
+
+        Returns:
+            float: Consumo adicional de resistencia (0.0 a ~0.3+).
+        """
         consumo_base = self.consumo_resistencia.get(self.estado_actual, 0.0)
 
         if not self.en_transicion:
@@ -237,7 +273,12 @@ class SistemaClima:
             self._cambiar_clima()
 
     def _cambiar_clima(self):
-        """Cambia el clima usando la matriz de Markov cargada desde la API."""
+        """Cambia el clima usando la matriz de Markov cargada.
+
+        Selecciona un nuevo estado basándose en probabilidades
+        y genera una nueva intensidad entre 0.2 y 1.0.
+        Inicia una transición suave.
+        """
         if self.estado_actual not in self.matriz_transicion:
             print(f"Estado {self.estado_actual} no encontrado en matriz,"
                   f" usando aleatorio")
@@ -268,7 +309,12 @@ class SistemaClima:
               f" (intensidad: {self.intensidad_actual:.2f})")
 
     def obtener_info_clima(self):
-        """Retorna información del clima para mostrar en pantalla."""
+        """Retorna información útil del clima para mostrar en pantalla.
+
+        Returns:
+            dict: Información con estado, intensidad, multiplicador, consumo,
+                si está en transición y tiempo restante.
+        """
         return {
             'estado': self.estado_actual,
             'intensidad': self.intensidad_actual,
@@ -279,7 +325,14 @@ class SistemaClima:
         }
 
     def traducir_clima(self, estado):
-        """Traduce los climas para mostrarlos al jugador."""
+        """Traduce un estado climático al texto visible para el jugador.
+
+        Args:
+            estado (str): Clave del estado climático (e.g., "rain", "fog").
+
+        Returns:
+            str: Nombre traducido al español.
+        """
         traducciones = {
             'clear': 'Despejado ',
             'clouds': 'Nublado ',
@@ -294,7 +347,12 @@ class SistemaClima:
         return traducciones.get(estado, f"{estado} ")
 
     def obtener_efecto_descripcion(self):
-        """Retorna descripción del efecto actual del clima."""
+        """Genera una descripción cualitativa de las condiciones climáticas.
+
+        Returns:
+            str: Texto indicando la severidad del clima
+                ("Condiciones ideales", "Condiciones extremas", etc.).
+        """
         mult = self.obtener_multiplicador_actual()
         consumo = self.obtener_consumo_resistencia_extra()
 
@@ -308,7 +366,11 @@ class SistemaClima:
             return "Condiciones extremas"
 
     def debug_info(self):
-        """Información de debug sobre el sistema de clima."""
+        """Retorna información interna útil para depuración.
+
+        Returns:
+            dict: Datos estructurados sobre estados, transiciones y conexión.
+        """
         return {
             'estados_disponibles': self.estados_disponibles,
             'matriz_size': len(self.matriz_transicion),

@@ -17,17 +17,26 @@ from datetime import datetime
 
 
 class SistemaPersistencia:
-    """Se encarga de manejar la persistencia.
+    """Gestiona la persistencia de datos del juego.
 
-    Tanto el guardado y cargar los datos del juego,
-    incluyendo estados guardados y puntajes.
+    Esta clase se encarga de manejar la creación de carpetas,
+    guardado y carga del estado del juego, puntajes, configuración,
+    estadísticas y backups. También permite verificar integridad de
+    archivos mediante checksums.
     """
 
     def __init__(self):
-        """Crea las carpetas.
+        """Inicializa el manejador de persistencia.
 
-        Donde se guarardaran
-        los archivos del juego.
+        Crea las carpetas necesarias para almacenar archivos de
+        guardado, configuraciones, puntajes y estadísticas.
+
+        Attributes:
+            carpeta_saves (str): Carpeta donde se guardan los archivos .sav.
+            carpeta_data (str): Carpeta para archivos JSON (puntajes, config, etc.).
+            archivo_puntajes (str): Ruta al archivo de puntajes.
+            archivo_config (str): Ruta al archivo de configuración.
+            archivo_estadisticas (str): Ruta al archivo de estadísticas.
         """
         self.carpeta_saves = "saves"
         self.carpeta_data = "data"
@@ -37,7 +46,14 @@ class SistemaPersistencia:
         self.crear_carpetas()
 
     def restaurar_backup(self, fecha_backup):
-        """Restaura un backup específico."""
+        """Restaura un backup previamente creado.
+
+        Args:
+            fecha_backup (str): Fecha del backup en formato "YYYYMMDD_HHMMSS".
+
+        Returns:
+            bool: True si se restauró correctamente, False en caso de error.
+        """
         carpeta_backup = f"backups/backup_{fecha_backup}"
 
         if not os.path.exists(carpeta_backup):
@@ -71,7 +87,15 @@ class SistemaPersistencia:
                 os.makedirs(carpeta)
 
     def guardar_juego(self, estado_juego, slot=1):
-        """Guarda el estado del juego en un archivo."""
+        """Guarda el estado completo del juego en un archivo .sav.
+
+        Args:
+            estado_juego (dict): Diccionario con el estado del juego.
+            slot (int, optional): Número de slot donde guardar. Defaults to 1.
+
+        Returns:
+            bool: True si se guardó correctamente, False si ocurrió un error.
+        """
         archivo = f"{self.carpeta_saves}/slot{slot}.sav"
 
         try:
@@ -93,7 +117,15 @@ class SistemaPersistencia:
             return False
 
     def cargar_juego(self, slot=1):
-        """Carga el estado del juego desde un archivo."""
+        """Carga un estado de juego desde un archivo .sav.
+
+        Args:
+            slot (int, optional): Slot del guardado a cargar. Defaults to 1.
+
+        Returns:
+            dict | None: Estado del juego si existe y es válido,
+            None en caso de error o si el archivo no existe.
+        """
         archivo = f"{self.carpeta_saves}/slot{slot}.sav"
 
         if not os.path.exists(archivo):
@@ -113,7 +145,15 @@ class SistemaPersistencia:
             return None
 
     def listar_guardados(self):
-        """Retorna una lista con partidas guardadas."""
+        """Obtiene la lista de partidas guardadas disponibles.
+
+           Returns:
+               list[dict]: Lista con información de cada guardado encontrado.
+                   Cada elemento contiene:
+                   - slot (int)
+                   - fecha (str)
+                   - timestamp (float)
+        """
         guardados = []
 
         for i in range(1, 6):  # Slots 1-5
@@ -137,7 +177,16 @@ class SistemaPersistencia:
     def guardar_puntaje(
             self, nombre_jugador, puntaje_final,
             datos_extra=None):
-        """Guarda un puntaje al archivo .json."""
+        """Guarda un puntaje en el archivo JSON de puntajes.
+
+        Args:
+            nombre_jugador (str): Nombre del jugador.
+            puntaje_final (int): Puntaje obtenido.
+            datos_extra (dict, optional): Información adicional. Defaults to None.
+
+        Returns:
+            bool: True si se guardó correctamente, False en caso de error.
+        """
         nuevo_puntaje = {
             'nombre': nombre_jugador,
             'puntaje': puntaje_final,
@@ -168,7 +217,11 @@ class SistemaPersistencia:
             return False
 
     def cargar_puntajes(self):
-        """Lee puntajes.json y devuelve puntajes guardados."""
+        """Carga los puntajes almacenados en puntajes.json.
+
+        Returns:
+            list[dict]: Lista de puntajes. Puede estar vacía.
+        """
         if not os.path.exists(self.archivo_puntajes):
             return []
 
@@ -180,7 +233,11 @@ class SistemaPersistencia:
             return []
 
     def obtener_mejor_puntaje(self):
-        """Devuelve el puntaje más alto en el archivo."""
+        """Obtiene el puntaje más alto registrado.
+
+        Returns:
+            int: El puntaje máximo registrado o 0 si no hay datos.
+        """
         puntajes = self.cargar_puntajes()
         if puntajes:
             return puntajes[0]['puntaje']
@@ -188,7 +245,19 @@ class SistemaPersistencia:
 
     def calcular_puntaje_final(self, jugador, tiempo_total,
                                duracion_objetivo, meta_ingresos):
-        """Calcula el puntaje final del jugador."""
+        """Calcula el puntaje final del jugador según parámetros del juego.
+
+        Args:
+            jugador (Jugador): Objeto jugador con estadísticas actuales.
+            tiempo_total (float): Tiempo final de la partida.
+            duracion_objetivo (float): Tiempo máximo objetivo.
+            meta_ingresos (int): Meta de ingresos a cumplir.
+
+        Returns:
+            dict: Diccionario con:
+                - puntaje_final (int)
+                - desglose (dict) con base, bonificaciones y penalizaciones
+        """
         score_base = jugador.puntaje
 
         if jugador.reputacion >= 90:
@@ -219,7 +288,18 @@ class SistemaPersistencia:
         }
 
     def guardar_juego_completo(self, estado_juego, nombre_descripcion="", slot=1):
-        """Guarda el juego con información adicional."""
+        """Guarda un estado de juego con metadatos adicionales.
+
+        Incluye un checksum para validar integridad al cargar.
+
+        Args:
+            estado_juego (dict): Estado del juego.
+            nombre_descripcion (str, optional): Descripción del guardado.
+            slot (int, optional): Número del slot. Defaults to 1.
+
+        Returns:
+            bool: True si se guardó correctamente, False si falló.
+        """
         archivo = f"{self.carpeta_saves}/slot{slot}.sav"
 
         try:
@@ -243,13 +323,27 @@ class SistemaPersistencia:
             return False
 
     def _calcular_checksum(self, data):
-        """Calcula un checksum simple para verificar integridad."""
+        """Calcula un checksum simple para verificar integridad.
+
+        Args:
+            data (dict | list | any): Datos a validar.
+
+        Returns:
+            str: Hash MD5 de 8 caracteres.
+        """
         import hashlib
         data_str = str(data).encode('utf-8')
         return hashlib.md5(data_str).hexdigest()[:8]
 
     def verificar_guardado(self, slot=1):
-        """Verifica la integridad de un guardado."""
+        """Verifica la integridad de un guardado mediante checksum.
+
+        Args:
+            slot (int, optional): Slot del guardado. Defaults to 1.
+
+        Returns:
+            bool: True si el guardado es válido, False si está corrupto.
+        """
         archivo = f"{self.carpeta_saves}/slot{slot}.sav"
 
         if not os.path.exists(archivo):
@@ -267,7 +361,14 @@ class SistemaPersistencia:
             return False
 
     def guardar_configuracion(self, config):
-        """Guarda la configuración del juego."""
+        """Guarda ajustes de configuración del juego.
+
+        Args:
+            config (dict): Configuración a almacenar.
+
+        Returns:
+            bool: True si se guardó correctamente, False si falló.
+        """
         try:
             config['ultima_actualizacion'] = datetime.now().isoformat()
 
@@ -279,7 +380,13 @@ class SistemaPersistencia:
             return False
 
     def cargar_configuracion(self):
-        """Carga la configuración del juego."""
+        """Carga la configuración del juego desde archivo.
+
+        Si no existe, crea la configuración por defecto.
+
+        Returns:
+            dict: Configuración cargada o generada.
+        """
         config_default = {
             'volumen_musica': 0.7,
             'volumen_efectos': 0.8,
@@ -310,7 +417,14 @@ class SistemaPersistencia:
             return config_default
 
     def guardar_estadisticas_jugador(self, estadisticas):
-        """Guarda estadísticas detalladas del jugador."""
+        """Guarda estadísticas detalladas de una partida.
+
+        Args:
+            estadisticas (dict): Datos de la partida actual.
+
+        Returns:
+            bool: True si se guardó correctamente, False si falló.
+        """
         try:
             # Cargar estadísticas existentes
             if os.path.exists(self.archivo_estadisticas):
@@ -338,7 +452,11 @@ class SistemaPersistencia:
             return False
 
     def obtener_estadisticas_totales(self):
-        """Calcula estadísticas agregadas de todas las partidas."""
+        """Calcula estadísticas agregadas de todas las partidas registradas.
+
+        Returns:
+            dict: Estadísticas totales calculadas o {} si no hay datos.
+        """
         if not os.path.exists(self.archivo_estadisticas):
             return {}
 
@@ -366,7 +484,11 @@ class SistemaPersistencia:
             return {}
 
     def crear_backup(self):
-        """Crea un backup de todos los datos del juego."""
+        """Crea un backup completo del directorio de datos y saves.
+
+        Returns:
+            bool: True si el backup fue creado, False si ocurrió un error.
+        """
         import shutil
         from datetime import datetime
 
@@ -394,16 +516,31 @@ class SistemaPersistencia:
 
 
 class HistorialMovimientos:
-    """Maneja un registro de los movimientos del jugador."""
+    """Gestiona el historial de estados del jugador para permitir deshacer movimientos.
+
+    Almacena una lista de estados previos limitados por `max_pasos`,
+    permitiendo revertir la partida a un estado anterior.
+    """
 
     def __init__(self, max_pasos=50):
-        """Construye un historial vacío."""
+        """Inicializa el historial.
+
+        Args:
+            max_pasos (int, optional): Número máximo de estados a almacenar.
+                Defaults to 50.
+        """
         self.historial = []
         self.max_pasos = max_pasos
 
     def guardar_estado(
             self, jugador, pedidos_activos, tiempo):
-        """Guarda el estado actual del jugador."""
+        """Guarda el estado actual del jugador y los pedidos activos.
+
+        Args:
+            jugador (Jugador): Objeto jugador con sus atributos actuales.
+            pedidos_activos (list): Lista de pedidos activos.
+            tiempo (float): Tiempo actual del juego.
+        """
         estado = {
             'jugador_x': jugador.x,
             'jugador_y': jugador.y,
@@ -421,7 +558,17 @@ class HistorialMovimientos:
             self.historial.pop(0)
 
     def deshacer(self, jugador, pedidos_activos):
-        """Revierte al estado anterior si hay al menos 2."""
+        """Revierte el juego al estado previo guardado.
+
+        Se requiere al menos 2 estados para poder deshacer.
+
+        Args:
+            jugador (Jugador): Instancia del jugador a modificar.
+            pedidos_activos (list): Lista de pedidos activos a restaurar.
+
+        Returns:
+            bool: True si se revirtió correctamente, False si no hay suficientes estados.
+        """
         if len(self.historial) < 2:
             return False
 
@@ -442,10 +589,14 @@ class HistorialMovimientos:
         return True
 
     def puede_deshacer(self):
-        """Devuelve true si hay 2 estados guardados."""
+        """Indica si existe un estado previo que pueda revertirse.
+
+        Returns:
+            bool: True si el historial contiene al menos 2 estados.
+        """
         return len(self.historial) >= 2
 
     def limpiar_historial(self):
-        """Limpia el historial de movimientos."""
+        """Elimina todos los estados almacenados en el historial."""
         self.historial.clear()
         print("Historial de movimientos limpiado")

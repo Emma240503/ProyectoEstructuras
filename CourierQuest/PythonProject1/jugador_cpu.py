@@ -16,7 +16,14 @@ class JugadorCPU(Jugador):
     """Jugador controlado por IA con diferentes niveles de dificultad."""
 
     def __init__(self, x, y, dificultad='facil', capacidad=10):
+        """Inicializa la IA del jugador CPU.
 
+        Args:
+            x (int): Posición inicial en el eje X.
+            y (int): Posición inicial en el eje Y.
+            dificultad (str): Nivel de IA ('facil', 'media', 'dificil').
+            capacidad (int): Capacidad máxima de peso que puede cargar.
+        """
         super().__init__(x, y, capacidad)
         self.dificultad = dificultad
 
@@ -46,10 +53,16 @@ class JugadorCPU(Jugador):
         self.clima_mult_anterior = 1.0
         self.ultimo_replan = 0
 
+    def actualizar(self, mapa, pedidos_activos,
+                   clima_mult, consumo_clima_extra):
+        """Actualiza el comportamiento del CPU según su dificultad.
 
-
-    def actualizar(self, mapa, pedidos_activos, clima_mult, consumo_clima_extra):
-
+        Args:
+            mapa (list[list[str]]): Matriz del mapa.
+            pedidos_activos (list[Pedido]): Lista de pedidos disponibles.
+            clima_mult (float): Multiplicador de movimiento según el clima.
+            consumo_clima_extra (float): Costo adicional por clima.
+        """
         # Recuperar resistencia (heredado de Jugador)
         self.recuperar()
 
@@ -64,20 +77,31 @@ class JugadorCPU(Jugador):
 
         self.ultimo_movimiento = ahora
 
-#seleccionar dificultad desde el menu
+        # Seleccionar dificultad desde el menu
         if self.dificultad == 'facil':
-            self._ia_facil(mapa, pedidos_activos, clima_mult, consumo_clima_extra)
+            self._ia_facil(mapa, pedidos_activos,
+                           clima_mult, consumo_clima_extra)
         elif self.dificultad == 'media':
-            self._ia_media(mapa, pedidos_activos, clima_mult, consumo_clima_extra)
+            self._ia_media(mapa, pedidos_activos,
+                           clima_mult, consumo_clima_extra)
         elif self.dificultad == 'dificil':
-            self._ia_dificil(mapa, pedidos_activos, clima_mult, consumo_clima_extra)
+            self._ia_dificil(mapa, pedidos_activos,
+                             clima_mult, consumo_clima_extra)
 
     # ========================================
     # NIVEL FÁCIL
     # ========================================
 
-    def _ia_facil(self, mapa, pedidos_activos, clima_mult, consumo_clima_extra):
+    def _ia_facil(self, mapa, pedidos_activos,
+                  clima_mult, consumo_clima_extra):
+        """IA básica con movimiento aleatorio y objetivos simples.
 
+        Args:
+            mapa (list[list[str]]): Mapa del juego.
+            pedidos_activos (list[Pedido]): Pedidos no recogidos.
+            clima_mult (float): Multiplicador climático.
+            consumo_clima_extra (float): Costo adicional por clima.
+        """
         ahora = time.time()
 
         # Guardar posición actual en historial
@@ -87,11 +111,14 @@ class JugadorCPU(Jugador):
 
         # Detectar si está en un bucle
         if not self.modo_escape and len(self.historial_posiciones) >= 6:
-            # Contar cuántas veces aparece la posición actual en el historial reciente
+            # Contar cuántas veces aparece la posición actual
+            # en el historial reciente
             posicion_actual = (self.x, self.y)
-            repeticiones = self.historial_posiciones[-6:].count(posicion_actual)
+            repeticiones = (self.historial_posiciones[-6:]
+                            .count(posicion_actual))
 
-            # Si ha estado en la misma posición 3+ veces en las últimas 6 posiciones
+            # Si ha estado en la misma posición 3+
+            # veces en las últimas 6 posiciones
             if repeticiones >= 3:
 
                 self.modo_escape = True
@@ -99,13 +126,15 @@ class JugadorCPU(Jugador):
                 self.objetivo_actual = None  # Cambiar de objetivo
 
         # Desactivar modo escape
-        if self.modo_escape and (ahora - self.tiempo_escape > self.duracion_escape):
+        if (self.modo_escape and
+                (ahora - self.tiempo_escape > self.duracion_escape)):
             self.modo_escape = False
             self.historial_posiciones.clear()  # Limpiar historial
 
         # Verificar si hay que cambiar de objetivo
         if (self.objetivo_actual is None or
-                ahora - self.ultimo_cambio_objetivo > self.tiempo_cambio_objetivo):
+                ahora - self.ultimo_cambio_objetivo >
+                self.tiempo_cambio_objetivo):
             self._elegir_objetivo_aleatorio(pedidos_activos)
             self.ultimo_cambio_objetivo = ahora
             self.tiempo_cambio_objetivo = random.randint(3, 6)
@@ -118,7 +147,6 @@ class JugadorCPU(Jugador):
                     # Si recogimos nuestro objetivo, cambiar a entrega
                     if self.objetivo_actual == pedido.pickup:
                         self.objetivo_actual = pedido.dropoff
-
 
         # Intentar entregar pedido
         entregado = self.entregar_pedido()
@@ -135,7 +163,8 @@ class JugadorCPU(Jugador):
         elif self.objetivo_actual:
             # Modo normal: 70% hacia objetivo, 30% aleatorio
             if random.random() < 0.7:
-                self._mover_hacia_objetivo(mapa, clima_mult, consumo_clima_extra)
+                (self._mover_hacia_objetivo
+                 (mapa, clima_mult, consumo_clima_extra))
             else:
                 self._mover_aleatorio(mapa, clima_mult, consumo_clima_extra)
         else:
@@ -143,10 +172,10 @@ class JugadorCPU(Jugador):
             self._mover_aleatorio(mapa, clima_mult, consumo_clima_extra)
 
     def _elegir_objetivo_aleatorio(self, pedidos_activos):
-        """Elige un pedido aleatorio como objetivo.
+        """Selecciona aleatoriamente un pedido como objetivo.
 
         Args:
-            pedidos_activos: Lista de pedidos disponibles
+            pedidos_activos (list[Pedido]): Pedidos disponibles.
         """
         # Si tenemos pedidos en inventario, priorizar entregarlos
         if self.inventario:
@@ -162,7 +191,13 @@ class JugadorCPU(Jugador):
             self.objetivo_actual = None
 
     def _mover_hacia_objetivo(self, mapa, clima_mult, consumo_clima_extra):
+        """Se mueve aproximadamente hacia el objetivo actual.
 
+        Args:
+            mapa (list[list[str]]): Mapa del juego.
+            clima_mult (float): Multiplicador climático.
+            consumo_clima_extra (float): Costo extra por clima.
+        """
         if not self.objetivo_actual:
             return
 
@@ -212,17 +247,26 @@ class JugadorCPU(Jugador):
             nx, ny = self.x + dx, self.y + dy
 
             # Verificar si es válido
-            if (0 <= nx < len(mapa[0]) and 0 <= ny < len(mapa) and mapa[ny][nx] != "B"):
+            if (0 <= nx < len(mapa[0]) and
+                    0 <= ny < len(mapa) and mapa[ny][nx] != "B"):
                 # Verificar que no sea una posición reciente (evitar bucles)
-                if (nx, ny) not in self.historial_posiciones[-4:]:
-                    if self.mover(dx, dy, mapa, clima_mult, consumo_clima_extra):
+                if ((nx, ny) not in
+                        self.historial_posiciones[-4:]):
+                    if self.mover(dx, dy, mapa, clima_mult,
+                                  consumo_clima_extra):
                         return  # Movimiento exitoso
 
         # Si todos los intentos fallaron, moverse aleatorio
         self._mover_aleatorio(mapa, clima_mult, consumo_clima_extra)
 
     def _mover_aleatorio(self, mapa, clima_mult, consumo_clima_extra):
+        """Realiza un movimiento aleatorio válido.
 
+        Args:
+            mapa (list[list[str]]): Mapa del juego.
+            clima_mult (float): Multiplicador climático.
+            consumo_clima_extra (float): Costo adicional.
+        """
         # Direcciones posibles: arriba, abajo, izquierda, derecha
         direcciones = [
             (0, -1),  # Arriba
@@ -268,11 +312,19 @@ class JugadorCPU(Jugador):
     # NIVEL MEDIO - GREEDY/EXPECTIMAX
     # ========================================
 
-    def _ia_media(self, mapa, pedidos_activos, clima_mult, consumo_clima_extra):
-        """IA nivel medio (Expectimax):
+    def _ia_media(self, mapa, pedidos_activos,
+                  clima_mult, consumo_clima_extra):
+        """IA nivel medio (Expectimax).
+
         - Evalúa varios movimientos adelante (profundidad)
-        - Calcula el valor esperado de cada movimiento considerando aleatoriedad
+        - Calcula el valor esperado de cada
+        movimiento considerando aleatoriedad
         - Elige el movimiento con mayor valor esperado
+        Args:
+            mapa (list[list[str]]): Mapa del juego.
+            pedidos_activos (list[Pedido]): Pedidos disponibles.
+            clima_mult (float): Multiplicador climático.
+            consumo_clima_extra (float): Costo adicional.
         """
 
         ahora = time.time()
@@ -287,20 +339,23 @@ class JugadorCPU(Jugador):
             pos_actual = (self.x, self.y)
             repeticiones = self.historial_posiciones[-6:].count(pos_actual)
 
-            # Si ha estado en la misma posición 3+ veces en las últimas 6 posiciones
+            # Si ha estado en la misma posición 3+
+            # veces en las últimas 6 posiciones
             if repeticiones >= 3:
                 self.modo_escape = True
                 self.tiempo_escape = ahora
                 self.objetivo_actual = None
 
         # Desactivar modo escape después del tiempo
-        if self.modo_escape and (ahora - self.tiempo_escape > self.duracion_escape):
+        if self.modo_escape and (ahora - self.tiempo_escape >
+                                 self.duracion_escape):
             self.modo_escape = False
             self.historial_posiciones.clear()
 
         # Elegir objetivo (más cercano o más importante)
         if (self.objetivo_actual is None or
-                ahora - self.ultimo_cambio_objetivo > self.tiempo_cambio_objetivo):
+                ahora - self.ultimo_cambio_objetivo >
+                self.tiempo_cambio_objetivo):
             self._elegir_objetivo_expectimax(pedidos_activos)
             self.ultimo_cambio_objetivo = ahora
             self.tiempo_cambio_objetivo = random.randint(5, 9)
@@ -313,7 +368,6 @@ class JugadorCPU(Jugador):
                     if self.objetivo_actual == pedido.pickup:
                         self.objetivo_actual = pedido.dropoff
 
-
         # Entregar pedido si estamos en dropoff
         entregado = self.entregar_pedido()
         if entregado:
@@ -325,19 +379,24 @@ class JugadorCPU(Jugador):
         if self.modo_escape:
             self._mover_aleatorio(mapa, clima_mult, consumo_clima_extra)
         elif self.objetivo_actual:
-            self._mover_expectimax(mapa, clima_mult, consumo_clima_extra, profundidad=2)
+            self._mover_expectimax(mapa, clima_mult,
+                                   consumo_clima_extra, profundidad=2)
         else:
             self._mover_aleatorio(mapa, clima_mult, consumo_clima_extra)
 
-    def _mover_expectimax(self, mapa, clima_mult, consumo_clima_extra, profundidad=2):
-        """Usa Expectimax para decidir el mejor movimiento a varias profundidades.
+    def _mover_expectimax(self, mapa, clima_mult,
+                          consumo_clima_extra, profundidad=2):
+        """Selecciona el mejor movimiento usando Expectimax.
 
-         Args:
-            mapa: Matriz del mapa
-            clima_mult: Multiplicador de velocidad por clima
-            consumo_clima_extra: Consumo extra de resistencia
+        Args:
+            mapa (list[list[str]]): Mapa del juego.
+            clima_mult (float): Efecto del clima.
+            consumo_clima_extra (float): Costo extra.
+            profundidad (int): Profundidad de búsqueda.
         """
-        direcciones = [(0, -1), (0, 1), (-1, 0), (1, 0)]  # Arriba, abajo, izquierda, derecha
+        direcciones = [(0, -1), (0, 1), (-1, 0), (1, 0)]
+        # Arriba, abajo, izquierda, derecha
+
         mejor_valor = float('-inf')
         mejor_movimiento = None
 
@@ -349,7 +408,8 @@ class JugadorCPU(Jugador):
             if mapa[ny][nx] == "B":
                 continue
 
-            valor = self._expectimax_valor(mapa, nx, ny, profundidad - 1, es_turno_cpu=False)
+            valor = (self._expectimax_valor
+                     (mapa, nx, ny, profundidad - 1, es_turno_cpu=False))
             if valor > mejor_valor:
                 mejor_valor = valor
                 mejor_movimiento = (dx, dy)
@@ -362,7 +422,18 @@ class JugadorCPU(Jugador):
             self._mover_aleatorio(mapa, clima_mult, consumo_clima_extra)
 
     def _expectimax_valor(self, mapa, x, y, profundidad, es_turno_cpu):
-        """Evalúa el valor esperado recursivamente."""
+        """Calcula el valor esperado de un estado para Expectimax.
+
+        Args:
+            mapa (list[list[str]]): Mapa del juego.
+            x (int): Posición X evaluada.
+            y (int): Posición Y evaluada.
+            profundidad (int): Profundidad restante.
+            es_turno_cpu (bool): Si el nodo es MAX o CHANCE.
+
+        Returns:
+            float: Valor heurístico estimado.
+        """
         if profundidad == 0 or not self.objetivo_actual:
             return -self._distancia_objetivo(x, y)
 
@@ -375,11 +446,14 @@ class JugadorCPU(Jugador):
                     continue
                 if mapa[ny][nx] == "B":
                     continue
-                valor = self._expectimax_valor(mapa, nx, ny, profundidad - 1, es_turno_cpu=False)
+                valor = (self._expectimax_valor
+                         (mapa, nx, ny, profundidad - 1, es_turno_cpu=False))
                 mejor = max(mejor, valor)
             return mejor
         else:
-            # Turno "aleatorio" (CHANCE node): se asume que puede moverse a cualquiera de 4 direcciones con igual probabilidad
+            # Turno "aleatorio" (CHANCE node):
+            # se asume que puede moverse a cualquiera de 4 direcciones
+            # con igual probabilidad
             total = 0
             count = 0
             for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
@@ -388,19 +462,32 @@ class JugadorCPU(Jugador):
                     continue
                 if mapa[ny][nx] == "B":
                     continue
-                total += self._expectimax_valor(mapa, nx, ny, profundidad - 1, es_turno_cpu=True)
+                total += (self._expectimax_valor
+                          (mapa, nx, ny, profundidad - 1, es_turno_cpu=True))
                 count += 1
             return total / count if count > 0 else -self._distancia_objetivo(x, y)
 
     def _distancia_objetivo(self, x, y):
-        """Calcula la distancia al objetivo actual."""
+        """Calcula la distancia al objetivo actual.
+
+        Args:
+            x (int): Posición X.
+            y (int): Posición Y.
+
+        Returns:
+            int: Distancia al objetivo o 9999 si no existe.
+        """
         if not self.objetivo_actual:
             return 9999
         ox, oy = self.objetivo_actual
         return abs(ox - x) + abs(oy - y)
 
     def _elegir_objetivo_expectimax(self, pedidos_activos):
-        """Elige el pedido con mejor valor esperado (distancia + prioridad)."""
+        """Elige el mejor objetivo considerando prioridad y distancia.
+
+        Args:
+            pedidos_activos (list[Pedido]): Pedidos disponibles.
+        """
         if self.inventario:
             pedido_prioritario = max(self.inventario, key=lambda p: p.priority)
             self.objetivo_actual = pedido_prioritario.dropoff
@@ -424,6 +511,14 @@ class JugadorCPU(Jugador):
     # ========================================
 
     def _ia_dificil(self, mapa, pedidos_activos, clima_mult, consumo_clima_extra):
+        """IA nivel dificil, usa rutas óptimas mediante A*.
+
+        Args:
+            mapa (list[list[str]]): Mapa del juego.
+            pedidos_activos (list[Pedido]): Pedidos activos.
+            clima_mult (float): Modificador climático.
+            consumo_clima_extra (float): Penalización climática.
+        """
         ahora = time.time()
 
         # Guardar posición actual en historial
@@ -488,7 +583,14 @@ class JugadorCPU(Jugador):
             self._mover_aleatorio(mapa, clima_mult, consumo_clima_extra)
 
     def _planificar_estrategia_entregas(self, mapa, pedidos_activos, clima_mult, consumo_clima_extra):
+        """Planifica la mejor estrategia para recoger/entregar pedidos.
 
+        Args:
+            mapa (list[list[str]]): Mapa.
+            pedidos_activos (list[Pedido]): Lista de pedidos.
+            clima_mult (float): Velocidad por clima.
+            consumo_clima_extra (float): Penalización.
+        """
         # Prioridad 1: Entregar pedidos en inventario
         if self.inventario:
             mejor_pedido = max(
@@ -566,9 +668,17 @@ class JugadorCPU(Jugador):
             self.ruta_planeada = []
 
     def _a_star(self, mapa, inicio, destino, clima_mult, consumo_clima_extra):
-        """Se investigo algoritmo A* y es mas facil para encontrar la mejor ruta.
+        """Calcula una ruta óptima usando A*.
 
+        Args:
+            mapa (list[list[str]]): Mapa del juego.
+            inicio (tuple[int, int]): Posición inicial.
+            destino (tuple[int, int]): Meta.
+            clima_mult (float): Multiplicador climático.
+            consumo_clima_extra (float): Penalización.
 
+        Returns:
+            list[tuple[int, int]]: Lista de posiciones representando la ruta.
         """
         from heapq import heappush, heappop
 
@@ -647,7 +757,18 @@ class JugadorCPU(Jugador):
         return []
 
     def _calcular_costo_arista(self, mapa, desde, hacia, clima_mult, consumo_clima_extra):
+        """Calcula el costo de mover de un nodo a otro.
 
+                Args:
+                    mapa (list[list[str]]): Mapa del juego.
+                    desde (tuple[int, int]): Nodo origen.
+                    hacia (tuple[int, int]): Nodo destino.
+                    clima_mult (float): Multiplicador climático.
+                    consumo_clima_extra (float): Costo adicional.
+
+                Returns:
+                    float: Costo total del movimiento.
+                """
         costo = 1.0
 
         # Factor por tipo de superficie
@@ -677,11 +798,27 @@ class JugadorCPU(Jugador):
         return costo
 
     def _heuristica(self, pos_actual, pos_destino):
+        """Heurística Manhattan usada por A*.
 
+        Args:
+            pos_actual (tuple[int, int]): Nodo actual.
+            pos_destino (tuple[int, int]): Meta.
+
+        Returns:
+            int: Distancia heurística.
+        """
         return abs(pos_actual[0] - pos_destino[0]) + abs(pos_actual[1] - pos_destino[1])
 
     def _reconstruir_camino(self, vino_de, actual):
+        """Reconstruye la ruta generada por A*.
 
+        Args:
+            vino_de (dict): Diccionario de predecesores.
+            actual (tuple[int, int]): Nodo final.
+
+        Returns:
+            list[tuple[int, int]]: Ruta reconstruida.
+        """
         camino = []
         while actual in vino_de:
             camino.append(actual)
@@ -689,5 +826,3 @@ class JugadorCPU(Jugador):
 
         camino.reverse()
         return camino
-
-

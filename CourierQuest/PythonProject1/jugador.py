@@ -13,10 +13,20 @@ from collections import deque  # Para utilizar colas
 
 
 class Jugador:
-    """Clase para crear un objeto Jugador."""
+    """Representa al jugador.
+
+    Administra movimiento, resistencia, entregas,
+    inventario y reputación.
+    """
 
     def __init__(self, x, y, capacidad=10):
-        """Construye el objeto jugador con su direccion (x,y) y variables."""
+        """Inicializa un jugador con posición, atributos base y estadísticas.
+
+        Args:
+            x (int): Posición inicial en eje X.
+            y (int): Posición inicial en eje Y.
+            capacidad (int): Peso máximo que puede llevar el jugador.
+        """
         self.x = x           # Ubicación del personaje.
         self.y = y
         self.inventario = deque()   # Inventario en cola.
@@ -38,13 +48,28 @@ class Jugador:
         self.entregas_tardias = 0
 
     def peso_total(self):
-        """Calcula el peso total actual del jugador."""
+        """Calcula el peso total del inventario.
+
+        Returns:
+            float: Peso total de todos los pedidos en el inventario.
+        """
         return sum(p.weight for p in self.inventario)
 
     def calcular_multiplicador_velocidad(self, clima_mult, mapa_tiles):
-        """Calcula el multiplicador de velocidad usando la fórmula completa.
+        """Calcula el multiplicador de velocidad del jugador.
 
-        v = v0 * mclima * mpeso * mrep * mresistencia * surface_weight.
+        Usa factores de clima, peso, reputación, resistencia y superficie
+        para producir el multiplicador final.
+
+        Fórmula:
+            v = v0 * mclima * mpeso * mrep * mresistencia * surface_weight
+
+        Args:
+            clima_mult (float): Multiplicador proveniente del clima.
+            mapa_tiles (list[list[str]]): Mapa del juego con tipos de terreno.
+
+        Returns:
+            float: Multiplicador final de velocidad (>= 0).
         """
         # mpeso = max(0.8, 1 - 0.03 * peso_total).
         peso = self.peso_total()
@@ -75,9 +100,20 @@ class Jugador:
         return max(0, velocidad_final)
 
     def mover(self, dx, dy, mapa, clima_mult=1.0, consumo_clima_extra=0.0):
-        """Cambia la direccion en (x,y) del jugador.
+        """Intenta mover al jugador en la dirección indicada.
 
-        para moverse por el mapa.
+        Considera colisiones, clima, peso, superficie y resistencia.
+
+        Args:
+            dx (int): Desplazamiento en X.
+            dy (int): Desplazamiento en Y.
+            mapa (list[list[str]]): Mapa del juego.
+            clima_mult (float): Multiplicador climático aplicado al movimiento.
+            consumo_clima_extra (float):
+            Consumo adicional proveniente del clima.
+
+        Returns:
+            bool: True si el movimiento fue exitoso, False de otro modo.
         """
         if self.bloqueado:
             return False
@@ -121,7 +157,10 @@ class Jugador:
         return True
 
     def recuperar(self):
-        """Maneja la recuperación de la resistencia del jugador."""
+        """Recupera resistencia automáticamente cada segundo.
+
+        Si alcanza suficiente resistencia, deja de estar bloqueado.
+        """
         ahora = time.time()
         if ahora - self.ultimo_recupero >= 1:  # Cada segundo
             puntos_recuperacion = 5  # 5 puntos por segundo según PDF
@@ -134,7 +173,14 @@ class Jugador:
                 self.bloqueado = False
 
     def recoger_pedido(self, pedido):
-        """Recoge pedidos en el inventario si hay capacidad."""
+        """Intenta agregar un pedido al inventario.
+
+        Args:
+            pedido (Pedido): Pedido a recoger.
+
+        Returns:
+            bool: True si se agregó, False si excede la capacidad.
+        """
         pedido.tiempo_recogido = time.time()
 
         if self.peso_total() + pedido.weight <= self.capacidad:
@@ -149,7 +195,11 @@ class Jugador:
             return False
 
     def cancelar_ultimo_pedido(self):
-        """Cancelar el último pedido recogido."""
+        """Cancela el pedido más reciente del inventario.
+
+        Returns:
+            Pedido | None: Pedido cancelado si existía, None de lo contrario.
+        """
         if self.inventario:
             pedido_cancelado = self.inventario.pop()
             self.reputacion = max(0, self.reputacion - 4)
@@ -165,7 +215,14 @@ class Jugador:
             return None
 
     def entregar_pedido(self):
-        """Entrega un pedido con sistema de prioridades mejorado."""
+        """Entrega un pedido según prioridad y calcula reputación y pago.
+
+        Revisa si el jugador está sobre el dropoff y aplica sistemas de
+        reputación, rachas y bonificaciones.
+
+        Returns:
+            Pedido | None: El pedido entregado, o None si no se pudo entregar.
+        """
         if not self.inventario:
             return None
 
@@ -246,7 +303,14 @@ class Jugador:
         return None
 
     def obtener_inventario_ordenado(self, criterio='prioridad'):
-        """Retorna el inventario del jugador ordenado por prioridad."""
+        """Retorna el inventario ordenado según un criterio.
+
+        Args:
+            criterio (str): 'prioridad' (default) o 'original'.
+
+        Returns:
+            list[Pedido]: Lista de pedidos ordenados.
+        """
         if criterio == 'prioridad':
             return sorted(self.inventario,
                           key=lambda p: p.priority, reverse=True)
@@ -254,7 +318,11 @@ class Jugador:
             return list(self.inventario)
 
     def obtener_inventario_por_plata(self):
-        """Hace Insertion sort a los pedidos, los ordena por plata."""
+        """Ordena los pedidos según payout usando insertion sort.
+
+        Returns:
+            list[Pedido]: Inventario ordenado de mayor a menor payout.
+        """
         lista = list(self.inventario)
         # Se pasa de queue a lista para hacer el ordenamiento.
         for i in range(1, len(lista)):
@@ -268,7 +336,12 @@ class Jugador:
         return list(self.inventario)
 
     def obtener_estadisticas(self):
-        """Retorna estadísticas del jugador para mostrar en UI."""
+        """Obtiene estadísticas del jugador para mostrar en la UI.
+
+        Returns:
+            dict: Estadísticas como entregas, cancelaciones, peso,
+                eficiencia y puntualidad.
+        """
         return {
             'entregas_completadas': self.entregas_completadas,
             'cancelaciones': self.cancelaciones,
@@ -283,7 +356,11 @@ class Jugador:
         }
 
     def obtener_estado_resistencia(self):
-        """Retorna el estado actual de resistencia."""
+        """Clasifica la resistencia del jugador en un estado descriptivo.
+
+        Returns:
+            str: 'Exhausto', 'Cansado', 'Fatigado' o 'Normal'.
+        """
         if self.resistencia <= 0:
             return "Exhausto"
         elif self.resistencia <= 30:

@@ -11,10 +11,18 @@ import random
 
 
 def obtener_casillas_libres(mapa, ocupadas=None):
-    """Retorna una lista.
+    """Obtiene todas las casillas libres del mapa.
 
-     La lista es de todas las casillas
-     libres (no bloqueadas) del mapa.
+    Es decir aquella que no esté bloqueada ("B") y no esté
+    incluida en el conjunto de casillas ocupadas.
+
+    Args:
+        mapa (list[list[str]]): Matriz del mapa.
+        ocupadas (set | None): Conjunto opcional de tuplas (x, y)
+            que representan casillas ya ocupadas.
+
+    Returns:
+        list[tuple[int, int]]: Lista de coordenadas libres del mapa.
     """
     if ocupadas is None:
         ocupadas = set()
@@ -28,10 +36,21 @@ def obtener_casillas_libres(mapa, ocupadas=None):
 
 
 def asignar_posicion_aleatoria(mapa, ocupadas, separacion=4):
-    """Asigna una posición aleatoria libre respetando la separación mínima.
+    """Asigna una casilla aleatoria libre respetando separación mínima.
+
+    La función busca una casilla libre que no esté bloqueada ni ocupada
+    y que además cumpla con una distancia mínima definida por `separacion`
+    respecto a cualquier casilla ocupada.
+
+    Args:
+        mapa (list[list[str]]): Matriz del mapa.
+        ocupadas (set): Conjunto de tuplas (x, y) que representan
+            casillas ocupadas.
+        separacion (int): Distancia mínima alrededor de la casilla candidata.
 
     Returns:
-        [x, y] si encuentra posición, None si no hay espacio
+        list[int] | None: Coordenadas [x, y] si se encuentra espacio válido,
+        o None si no existe ninguna casilla adecuada.
     """
     casillas_libres = obtener_casillas_libres(mapa, ocupadas)
     random.shuffle(casillas_libres)
@@ -57,18 +76,20 @@ def asignar_posicion_aleatoria(mapa, ocupadas, separacion=4):
 
 
 def reubicar_pedidos(pedidos, mapa, ocupadas=None, separacion=4):
-    """Reubica los pedidos.
+    """Reubica pedidos evitando casillas bloqueadas u ocupadas.
 
-        Al hacerlo evita casillas bloqueadas u ocupadas,
-        con separación mínima de 4.
+    Si un pickup o dropoff se encuentra en una casilla inválida, se busca
+    la casilla libre más cercana mediante BFS,
+    respetando una separación mínima.
 
-        Args:
-        pedidos (list): Lista de dicts con claves "pickup" y "dropoff".
-        mapa (list): Matriz del mapa.
-        ocupadas (set): Conjunto de tuplas (x, y) de casillas ocupadas.
-        separacion (int): Número mínimo de
-        casillas alrededor que deben estar libres.
-        """
+    Args:
+        pedidos (list[dict]): Lista de pedidos, cada uno con claves
+            "pickup" y "dropoff".
+        mapa (list[list[str]]): Matriz del mapa.
+        ocupadas (set | None): Conjunto de tuplas (x, y) ya ocupadas.
+        separacion (int): Distancia mínima a mantener respecto a
+            otras casillas ocupadas.
+    """
     if ocupadas is None:
         ocupadas = set()
 
@@ -138,7 +159,15 @@ def reubicar_pedidos(pedidos, mapa, ocupadas=None, separacion=4):
 
 
 def crear_objetos_pedidos(pedidos_data):
-    """Crea y retorna los pedidos tomándolos de la API."""
+    """Crea instancias de Pedido a partir de datos JSON.
+
+    Args:
+        pedidos_data (list[dict]): Lista de diccionarios obtenidos de la API,
+            cada uno con claves como "pickup", "dropoff", "weight", etc.
+
+    Returns:
+        list[Pedido]: Lista de objetos Pedido construidos.
+    """
     return [Pedido(p["pickup"], p["dropoff"],
                    p.get("weight", 1), p.get("priority", 0),
                    p.get("payout", 100)) for p in
